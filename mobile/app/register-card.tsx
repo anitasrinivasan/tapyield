@@ -215,7 +215,7 @@ export default function RegisterCard() {
         {/* ── SETTING UP / SUBMITTING ── */}
         {(stage === 'setting_up' || stage === 'submitting_key') && (
           <View style={styles.centeredBox}>
-            <ActivityIndicator color="#00e676" size="large" />
+            <ActivityIndicator color="#111111" size="large" />
             <Text style={styles.statusText}>
               {stage === 'setting_up' ? 'Generating regular key…' : 'Submitting SetRegularKey…'}
             </Text>
@@ -230,14 +230,14 @@ export default function RegisterCard() {
             {qrUrl ? (
               <Image source={{ uri: qrUrl }} style={styles.qr} resizeMode="contain" />
             ) : (
-              <ActivityIndicator color="#00e676" size="large" style={{ marginVertical: 32 }} />
+              <ActivityIndicator color="#111111" size="large" style={{ marginVertical: 32 }} />
             )}
             {deepLink ? (
               <TouchableOpacity onPress={() => Linking.openURL(deepLink)}>
                 <Text style={styles.deepLink}>Open in Xaman app →</Text>
               </TouchableOpacity>
             ) : null}
-            <ActivityIndicator color="#4a5568" size="small" style={{ marginTop: 16 }} />
+            <ActivityIndicator color="#888888" size="small" style={{ marginTop: 16 }} />
             <Text style={styles.hint}>Waiting for signature…</Text>
           </View>
         )}
@@ -257,7 +257,7 @@ export default function RegisterCard() {
         {/* ── SCANNING / REGISTERING ── */}
         {(stage === 'scanning' || stage === 'registering') && (
           <View style={styles.centeredBox}>
-            <ActivityIndicator color="#00e676" size="large" />
+            <ActivityIndicator color="#111111" size="large" />
             <Text style={styles.statusText}>
               {stage === 'scanning' ? 'Reading card…' : 'Registering…'}
             </Text>
@@ -269,60 +269,61 @@ export default function RegisterCard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
+  container: { flex: 1, backgroundColor: '#EBEBEB' },
   content: { padding: 24, paddingBottom: 48 },
-  title: { color: '#fff', fontSize: 26, fontWeight: '800', marginBottom: 6 },
-  subtitle: { color: '#8892b0', fontSize: 13, marginBottom: 28 },
+  title: { color: '#111111', fontSize: 26, fontWeight: '800', marginBottom: 6 },
+  subtitle: { color: '#666666', fontSize: 13, marginBottom: 28 },
 
-  label: { color: '#ccd6f6', fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 16 },
+  label: { color: '#111111', fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 16 },
   input: {
-    backgroundColor: '#141929', borderRadius: 12, padding: 14,
-    color: '#fff', fontSize: 14, borderWidth: 1, borderColor: '#1e2740',
+    backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14,
+    color: '#111111', fontSize: 14,
   },
 
   modeRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   modeBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 10,
-    borderWidth: 1, borderColor: '#1e2740', alignItems: 'center',
+    flex: 1, paddingVertical: 12, borderRadius: 14,
+    borderWidth: 2, borderColor: '#DDDDDD', alignItems: 'center',
+    backgroundColor: '#F0F0F0',
   },
-  modeBtnActive: { borderColor: '#00e676', backgroundColor: '#00e67615' },
-  modeBtnText: { color: '#4a5568', fontSize: 14, fontWeight: '600' },
-  modeBtnTextActive: { color: '#00e676' },
+  modeBtnActive: { borderColor: '#111111', backgroundColor: '#FFFFFF' },
+  modeBtnText: { color: '#888888', fontSize: 14, fontWeight: '600' },
+  modeBtnTextActive: { color: '#111111' },
 
   primaryBtn: {
-    backgroundColor: '#00e676', borderRadius: 12, padding: 16,
+    backgroundColor: '#111111', borderRadius: 40, padding: 18,
     alignItems: 'center', marginTop: 28,
   },
-  primaryBtnText: { color: '#0a0e1a', fontSize: 16, fontWeight: '700' },
+  primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 
   btn: {
-    backgroundColor: '#1e2740', borderRadius: 12, padding: 14,
+    backgroundColor: '#F0F0F0', borderRadius: 40, padding: 14,
     alignItems: 'center', marginTop: 16,
   },
-  btnText: { color: '#ccd6f6', fontSize: 15, fontWeight: '600' },
+  btnText: { color: '#111111', fontSize: 15, fontWeight: '600' },
 
   centeredBox: { alignItems: 'center', paddingTop: 32, gap: 12 },
-  statusText: { color: '#ccd6f6', fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  hint: { color: '#8892b0', fontSize: 13, textAlign: 'center', maxWidth: 280 },
+  statusText: { color: '#111111', fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  hint: { color: '#666666', fontSize: 13, textAlign: 'center', maxWidth: 280 },
 
   qr: { width: 240, height: 240, marginVertical: 16, borderRadius: 12 },
-  deepLink: { color: '#00e676', fontSize: 14, fontWeight: '600', marginTop: 8 },
+  deepLink: { color: '#111111', fontSize: 14, fontWeight: '600', marginTop: 8, textDecorationLine: 'underline' },
 
   nfcArea: {
-    marginTop: 24, backgroundColor: '#141929', borderRadius: 20,
-    borderWidth: 2, borderColor: '#1e2740', padding: 40, alignItems: 'center', gap: 12,
+    marginTop: 24, backgroundColor: '#FFFFFF', borderRadius: 20,
+    borderWidth: 2, borderColor: '#DDDDDD', padding: 40, alignItems: 'center', gap: 12,
   },
   nfcIcon: { fontSize: 48 },
-  nfcLabel: { color: '#ccd6f6', fontSize: 16, fontWeight: '700' },
+  nfcLabel: { color: '#111111', fontSize: 16, fontWeight: '700' },
 
   successBox: { alignItems: 'center', paddingTop: 32, gap: 10 },
-  successIcon: { fontSize: 56, color: '#00e676' },
-  successTitle: { color: '#00e676', fontSize: 22, fontWeight: '800' },
-  mono: { color: '#8892b0', fontSize: 12, fontFamily: 'monospace' },
+  successIcon: { fontSize: 56, color: '#111111' },
+  successTitle: { color: '#111111', fontSize: 22, fontWeight: '800' },
+  mono: { color: '#666666', fontSize: 12, fontFamily: 'monospace' },
 
   errorBox: {
-    backgroundColor: '#ff000015', borderRadius: 12, padding: 16,
+    backgroundColor: '#FFF0F0', borderRadius: 16, padding: 16,
     marginTop: 24, alignItems: 'center', gap: 12,
   },
-  errorText: { color: '#ff6b6b', fontSize: 14, textAlign: 'center' },
+  errorText: { color: '#CC0000', fontSize: 14, textAlign: 'center' },
 });

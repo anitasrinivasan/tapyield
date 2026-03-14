@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Xumm } from 'xumm';
+import { XummSdk } from 'xumm-sdk';
 
 const router = Router();
 
@@ -7,7 +7,7 @@ function getXumm() {
   const key = process.env.XUMM_API_KEY;
   const secret = process.env.XUMM_API_SECRET;
   if (!key || !secret) throw new Error('XUMM_API_KEY and XUMM_API_SECRET not configured in .env');
-  return new Xumm(key, secret);
+  return new XummSdk(key, secret);
 }
 
 // Create a Xaman sign-in payload (to get wallet address) or a SetRegularKey payload.
@@ -53,7 +53,7 @@ router.post('/payload', async (req: Request, res: Response) => {
 router.get('/payload/:id', async (req: Request, res: Response) => {
   try {
     const xumm = getXumm();
-    const result = await xumm.payload?.get(req.params.id);
+    const result = await xumm.payload?.get(req.params.id as string);
     if (!result) {
       res.status(404).json({ error: 'Payload not found' });
       return;
@@ -66,6 +66,37 @@ router.get('/payload/:id', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('Xaman poll error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Convenience alias: POST /xaman/signin
+router.post('/signin', async (req: Request, res: Response) => {
+  try {
+    const xumm = getXumm();
+    const payload = await xumm.payload?.create({ txjson: { TransactionType: 'SignIn' } });
+    if (!payload) throw new Error('Xaman returned empty payload');
+    res.json({ payloadId: payload.uuid, qrUrl: payload.refs.qr_png, deepLink: payload.next.always });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Convenience alias: POST /xaman/set-regular-key
+router.post('/set-regular-key', async (req: Request, res: Response) => {
+  try {
+    const { account, regularKeyAddress } = req.body;
+    if (!account || !regularKeyAddress) {
+      res.status(400).json({ error: 'account and regularKeyAddress required' });
+      return;
+    }
+    const xumm = getXumm();
+    const payload = await xumm.payload?.create({
+      txjson: { TransactionType: 'SetRegularKey', Account: account, RegularKey: regularKeyAddress },
+    });
+    if (!payload) throw new Error('Xaman returned empty payload');
+    res.json({ payloadId: payload.uuid, qrUrl: payload.refs.qr_png, deepLink: payload.next.always });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });

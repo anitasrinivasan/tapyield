@@ -10,18 +10,26 @@ import { getWalletStatus, WalletStatusResponse, Goal } from '../services/api';
 const XRP_TO_USD = 2.50;
 const usd = (xrp: number) => `$${(xrp * XRP_TO_USD).toFixed(2)}`;
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-function daysLeft(goal: Goal): number {
-  return Math.max(0, Math.ceil((new Date(goal.finishAfter).getTime() - Date.now()) / MS_PER_DAY));
-}
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric',
   }).toUpperCase();
 }
 
-export default function Dashboard() {
+function NfcWaves() {
+  return (
+    <View style={nfcStyles.container}>
+      <Text style={nfcStyles.wave}>{')))'}}</Text>
+    </View>
+  );
+}
+
+const nfcStyles = StyleSheet.create({
+  container: { justifyContent: 'center', alignItems: 'center', width: 36, height: 36 },
+  wave: { fontSize: 28, color: '#111111', fontWeight: '300', letterSpacing: -4 },
+});
+
+export default function CardPage() {
   const [wallet, setWallet] = useState<{ address: string; seed: string } | null>(null);
   const [status, setStatus] = useState<WalletStatusResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,8 +53,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (!wallet) return;
     fetchStatus();
-    const interval = setInterval(fetchStatus, 8000);
-    return () => clearInterval(interval);
   }, [wallet, fetchStatus]);
 
   const onRefresh = async () => {
@@ -55,20 +61,9 @@ export default function Dashboard() {
     setRefreshing(false);
   };
 
-  if (!status) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const spendingBalance = parseFloat(status.spendingBalance);
-  const lockedGoals = status.goals.filter(g => g.status === 'locked');
-  const releasedGoals = status.goals.filter(g => g.status === 'released');
-  const allGoals = status.goals;
+  const spendingBalance = status ? parseFloat(status.spendingBalance) : 0;
+  const totalYield = status ? parseFloat(status.totalYieldEarned) : 0;
+  const allGoals = status?.goals ?? [];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -77,61 +72,37 @@ export default function Dashboard() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#111" />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logo}>Tap Yield</Text>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>👤</Text>
-          </View>
-        </View>
-
-        {/* Card Widget */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => router.push('/card')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.cardLabel}>YOUR CARD</Text>
-          <Text style={styles.cardBalance}>{usd(spendingBalance)}</Text>
-          {parseFloat(status.totalYieldEarned) > 0 && (
-            <View style={styles.yieldBadge}>
-              <Text style={styles.yieldBadgeText}>
-                +{usd(parseFloat(status.totalYieldEarned))} earned in yield
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Locked Funds Panel */}
-        <View style={styles.whitePanel}>
-          <Text style={styles.sectionLabel}>YOUR LOCKED FUNDS</Text>
-
-          {lockedGoals.length === 0 && (
-            <Text style={styles.emptyText}>No locked goals yet</Text>
-          )}
-
-          {lockedGoals.map((goal) => (
-            <TouchableOpacity
-              key={goal.id}
-              style={styles.goalCard}
-              onPress={() => router.push(`/goal/${goal.id}`)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.goalName}>{goal.name}</Text>
-              <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
-              <Text style={styles.goalDays}>{daysLeft(goal)} days left</Text>
-            </TouchableOpacity>
-          ))}
-
-          <TouchableOpacity
-            style={styles.createGoalBtn}
-            onPress={() => router.push('/goal/create')}
-          >
-            <Text style={styles.createGoalText}>+ Create goal</Text>
+        {/* Back button */}
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Recent Activity Panel */}
+        {/* Card Widget */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>YOUR CARD</Text>
+          <Text style={styles.cardBalance}>{usd(spendingBalance)}</Text>
+          {totalYield > 0 && (
+            <View style={styles.yieldBadge}>
+              <Text style={styles.yieldBadgeText}>
+                +{usd(totalYield)} earned in yield
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* NFC Pay Instruction */}
+        <TouchableOpacity
+          style={styles.nfcRow}
+          onPress={() => router.push('/pay')}
+          activeOpacity={0.7}
+        >
+          <NfcWaves />
+          <Text style={styles.nfcText}>Hold NFC near sensor to pay</Text>
+        </TouchableOpacity>
+
+        {/* Recent Activity */}
         <View style={styles.darkPanel}>
           <Text style={styles.darkSectionLabel}>RECENT ACTIVITY</Text>
 
@@ -139,7 +110,7 @@ export default function Dashboard() {
             <Text style={styles.darkEmptyText}>No activity yet</Text>
           )}
 
-          {allGoals.map((goal) => (
+          {allGoals.map((goal: Goal) => (
             <TouchableOpacity
               key={goal.id}
               style={styles.activityCard}
@@ -153,21 +124,6 @@ export default function Dashboard() {
             </TouchableOpacity>
           ))}
 
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => router.push('/deposit')}
-            >
-              <Text style={styles.actionBtnText}>+ Deposit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => router.push('/register-card')}
-            >
-              <Text style={styles.actionBtnText}>Register Card</Text>
-            </TouchableOpacity>
-          </View>
-
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
@@ -178,23 +134,13 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#EBEBEB' },
   scroll: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: '#666', fontSize: 16 },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  logo: { fontSize: 32, fontWeight: '800', color: '#111111' },
-  avatar: {
+  topBar: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  backBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#111111', justifyContent: 'center', alignItems: 'center',
   },
-  avatarText: { fontSize: 18 },
+  backArrow: { color: '#FFFFFF', fontSize: 24, fontWeight: '300', marginTop: -2, marginLeft: -2 },
 
   card: {
     marginHorizontal: 16,
@@ -202,7 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#8A8A8A',
     borderRadius: 20,
     padding: 24,
-    minHeight: 160,
+    minHeight: 200,
     justifyContent: 'space-between',
     zIndex: 1,
   },
@@ -227,42 +173,22 @@ const styles = StyleSheet.create({
   },
   yieldBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
 
-  whitePanel: {
+  nfcRow: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 8,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111111',
-    letterSpacing: 1,
-    marginBottom: 20,
-  },
-  emptyText: { color: '#999', fontSize: 14, marginBottom: 16 },
-
-  goalCard: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  goalName: { fontSize: 14, color: '#666666', marginBottom: 4 },
-  goalAmount: { fontSize: 32, fontWeight: '700', color: '#111111' },
-  goalDays: {
-    fontSize: 13, color: '#999999', textAlign: 'right', marginTop: 8,
-  },
-
-  createGoalBtn: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 16,
-    paddingVertical: 16,
+    padding: 32,
+    paddingTop: 48,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 16,
   },
-  createGoalText: { fontSize: 15, fontWeight: '600', color: '#111111' },
+  nfcText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#111111',
+    flex: 1,
+    lineHeight: 26,
+  },
 
   darkPanel: {
     backgroundColor: '#111111',
@@ -288,19 +214,4 @@ const styles = StyleSheet.create({
   },
   activityDate: { fontSize: 12, color: '#888888', marginBottom: 8, letterSpacing: 0.5 },
   activityAmount: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
-
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: '#1E1E1E',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  actionBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 });

@@ -133,11 +133,6 @@ export async function pollXamanPayload(payloadId: string): Promise<{
   return data;
 }
 
-export async function setupRegularKey(address: string) {
-  const { data } = await api.post('/wallet/setup-regular-key', { address });
-  return data;
-}
-
 export async function registerCard(uid: string, address: string, name: string) {
   const { data } = await api.post('/card/register', { uid, address, name });
   return data;
