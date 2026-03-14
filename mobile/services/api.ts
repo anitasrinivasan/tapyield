@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Change this to your ngrok URL or local IP when testing on device
-const API_BASE = 'http://localhost:3000';
+// Railway deployment — accessible from any device
+const API_BASE = 'https://tapyield-backend-production.up.railway.app';
 
 const api = axios.create({
   baseURL: API_BASE,
