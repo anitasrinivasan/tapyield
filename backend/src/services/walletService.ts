@@ -1,7 +1,10 @@
 import { Wallet, xrpToDrops } from 'xrpl';
-import crypto from 'crypto';
 import { getClient } from './xrplClient';
-import { getUser, setUser, ammConfig, setCard, deleteCard, findCardByAddress } from '../store';
+import {
+  getUser, setUser, ammConfig,
+  setCard, deleteCard, findCardByAddress,
+  setPendingRegularKey, getPendingRegularKey, deletePendingRegularKey,
+} from '../store';
 import { UserState } from '../types';
 import { getAmmPositionXrpValue } from './ammService';
 
@@ -42,47 +45,53 @@ export async function createWallet() {
   };
 }
 
-export async function registerCard(address: string, seed: string, name?: string) {
-  const client = await getClient();
-  const masterWallet = Wallet.fromSeed(seed);
-  const user = getUser(address);
-  if (!user) throw new Error('User not found.');
-
-  // Generate a new keypair for the NFC card
+// Step 1 of card registration: generate a regular key pair.
+// Returns the regularKeyAddress so Alex's Xaman service can build
+// a SetRegularKey payload for the user to sign in their own wallet.
+// The regular key seed is stored temporarily on the server — never exposed.
+export async function setupRegularKey(address: string) {
   const regularKeyWallet = Wallet.generate();
 
-  // Submit SetRegularKey to authorize this keypair on-chain
-  const setRegKeyTx: any = {
-    TransactionType: 'SetRegularKey',
-    Account: masterWallet.address,
-    RegularKey: regularKeyWallet.classicAddress,
-  };
-
-  const prepared = await client.autofill(setRegKeyTx);
-  const signed = masterWallet.sign(prepared);
-  const result = await client.submitAndWait(signed.tx_blob);
-
-  // Store regular key in user state
-  user.regularKeySeed = regularKeyWallet.seed!;
-  user.regularKeyAddress = regularKeyWallet.classicAddress;
-  setUser(address, user);
-
-  // Generate a UUID and store card mapping on the backend
-  // The UUID is all that goes on the NFC card — no secrets leave the server
-  const cardId = crypto.randomUUID();
-  setCard(cardId, {
-    cardId,
-    address,
-    regularKeySeed: regularKeyWallet.seed!,
-    name: name || 'Customer',
-  });
+  // Store the seed temporarily until card registration completes
+  setPendingRegularKey(address, regularKeyWallet.seed!);
 
   return {
-    cardId,
-    txHash: result.result.hash,
+    regularKeyAddress: regularKeyWallet.classicAddress,
   };
 }
 
+// Step 2 of card registration: after the user has signed the SetRegularKey tx
+// in Xaman AND tapped their NFC card, map the hardware UID to their wallet.
+export function registerCard(uid: string, address: string, name?: string) {
+  const pending = getPendingRegularKey(address);
+  if (!pending) throw new Error('No pending regular key for this address. Call /wallet/setup-regular-key first.');
+
+  // Store card mapping: NFC hardware UID → wallet + regular key
+  setCard(uid, {
+    uid,
+    address,
+    regularKeySeed: pending.seed,
+    name: name || 'Customer',
+  });
+
+  // Also store in user state
+  const user = getUser(address);
+  if (user) {
+    const regularKeyWallet = Wallet.fromSeed(pending.seed);
+    user.regularKeySeed = pending.seed;
+    user.regularKeyAddress = regularKeyWallet.classicAddress;
+    setUser(address, user);
+  }
+
+  // Clean up temporary storage
+  deletePendingRegularKey(address);
+
+  return { registered: true, uid };
+}
+
+// Revoke a card: disables regular key on-chain + deletes UID mapping.
+// Requires master seed (user signs via Xaman in production, but this
+// endpoint also supports direct signing for testing/demo).
 export async function revokeCard(address: string, seed: string) {
   const client = await getClient();
   const masterWallet = Wallet.fromSeed(seed);
@@ -101,7 +110,7 @@ export async function revokeCard(address: string, seed: string) {
 
   // Delete card mapping from registry
   const card = findCardByAddress(address);
-  if (card) deleteCard(card.cardId);
+  if (card) deleteCard(card.uid);
 
   // Clear from user state
   user.regularKeySeed = undefined;

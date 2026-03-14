@@ -10,7 +10,7 @@ import { tapPayment } from '../services/api';
 const XRP_TO_USD = 2.50;
 
 export default function Pay() {
-  const [cardId, setCardId] = useState('');
+  const [cardUid, setCardUid] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [cardDetected, setCardDetected] = useState(false);
@@ -19,7 +19,7 @@ export default function Pay() {
   const usdEquiv = amount ? `$${(parseFloat(amount) * XRP_TO_USD).toFixed(2)}` : '';
 
   const handleCharge = async () => {
-    if (!cardId || !amount || parseFloat(amount) <= 0) {
+    if (!cardUid || !amount || parseFloat(amount) <= 0) {
       Alert.alert('Error', 'Scan a customer card and enter an amount');
       return;
     }
@@ -31,9 +31,9 @@ export default function Pay() {
       if (!stored) throw new Error('No merchant wallet found');
       const merchantWallet = JSON.parse(stored);
 
-      // Send card UUID + merchant address to backend
-      // Backend resolves card UUID → customer wallet, processes payment
-      const result = await tapPayment(cardId, merchantWallet.address, amount);
+      // Send card UID + merchant address to backend
+      // Backend resolves card UID → customer wallet, processes payment
+      const result = await tapPayment(cardUid, merchantWallet.address, amount);
       const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
       Alert.alert(
         'Payment Received!',
@@ -51,7 +51,7 @@ export default function Pay() {
   };
 
   const resetCard = () => {
-    setCardId('');
+    setCardUid('');
     setCardDetected(false);
     setCustomerName('');
   };
@@ -60,15 +60,15 @@ export default function Pay() {
   const handleCardTap = () => {
     Alert.alert(
       'Ready to Scan',
-      'Ask the customer to tap their TapYield card.\n\nFor demo: paste card UUID below.',
+      'Ask the customer to tap their TapYield card.\n\nFor demo: paste card UID below.',
     );
   };
 
   // Called by Alex's NFC module when a customer's card is read.
   // The NFC card contains only a UUID — no secrets.
-  // Alex: call onCardRead(cardId) when NFC tag is read.
+  // Alex: call onCardRead(cardUid) when NFC tag is read.
   const onCardRead = (id: string, name?: string) => {
-    setCardId(id);
+    setCardUid(id);
     setCardDetected(true);
     setCustomerName(name || 'Customer');
   };
@@ -111,8 +111,8 @@ export default function Pay() {
               <Text style={styles.cardIconDetected}>✓</Text>
               <Text style={styles.cardTextDetected}>Card Detected</Text>
               <Text style={styles.cardCustomer}>{customerName}</Text>
-              <Text style={styles.cardId}>
-                {cardId.slice(0, 8)}...
+              <Text style={styles.cardUid}>
+                {cardUid.slice(0, 8)}...
               </Text>
               <Text style={styles.cardTapAgain}>Tap to reset</Text>
             </>
@@ -133,11 +133,11 @@ export default function Pay() {
             <Text style={styles.manualLabel}>Demo: Manual Entry</Text>
             <TextInput
               style={styles.input}
-              placeholder="Card UUID"
+              placeholder="Card UID"
               placeholderTextColor="#4a5568"
-              value={cardId}
+              value={cardUid}
               onChangeText={(text) => {
-                setCardId(text);
+                setCardUid(text);
                 if (text.length >= 36) setCardDetected(true);
               }}
               autoCapitalize="none"
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   cardTextDetected: { color: '#00e676', fontSize: 18, fontWeight: '700' },
   cardSubtext: { color: '#4a5568', fontSize: 12, marginTop: 4 },
   cardCustomer: { color: '#ccd6f6', fontSize: 16, fontWeight: '600', marginTop: 4 },
-  cardId: { color: '#8892b0', fontSize: 12, fontFamily: 'monospace', marginTop: 4 },
+  cardUid: { color: '#8892b0', fontSize: 12, fontFamily: 'monospace', marginTop: 4 },
   cardTapAgain: { color: '#4a5568', fontSize: 11, marginTop: 8 },
 
   manualLabel: { color: '#4a5568', fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },

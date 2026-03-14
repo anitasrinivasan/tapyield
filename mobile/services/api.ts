@@ -71,12 +71,12 @@ export async function releaseGoal(address: string, seed: string, goalId: string)
 }
 
 export async function tapPayment(
-  cardId: string,
+  cardUid: string,
   merchantAddress: string,
   amountXrp: string
 ) {
   const { data } = await api.post('/payment/tap', {
-    cardId, merchantAddress, amountXrp,
+    cardUid, merchantAddress, amountXrp,
   });
   return data;
 }

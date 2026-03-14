@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { createWallet, getWalletStatus, registerCard, revokeCard } from '../services/walletService';
+import { createWallet, getWalletStatus, setupRegularKey, revokeCard } from '../services/walletService';
 
 const router = Router();
 
@@ -28,17 +28,19 @@ router.get('/status', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/register-card', async (req: Request, res: Response) => {
+// Step 1 of card registration: generate regular key pair.
+// Returns regularKeyAddress for Xaman to build SetRegularKey payload.
+router.post('/setup-regular-key', async (req: Request, res: Response) => {
   try {
-    const { address, seed, name } = req.body;
-    if (!address || !seed) {
-      res.status(400).json({ error: 'address and seed required' });
+    const { address } = req.body;
+    if (!address) {
+      res.status(400).json({ error: 'address required' });
       return;
     }
-    const result = await registerCard(address, seed, name);
+    const result = await setupRegularKey(address);
     res.json(result);
   } catch (err: any) {
-    console.error('Register card error:', err);
+    console.error('Setup regular key error:', err);
     res.status(500).json({ error: err.message });
   }
 });
