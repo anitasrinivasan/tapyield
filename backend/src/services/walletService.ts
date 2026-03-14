@@ -62,7 +62,7 @@ export async function setupRegularKey(address: string) {
 
 // Step 2 of card registration: after the user has signed the SetRegularKey tx
 // in Xaman AND tapped their NFC card, map the hardware UID to their wallet.
-export function registerCard(uid: string, address: string, name?: string) {
+export function registerCard(uid: string, address: string, name?: string, initialCtr: number = 0) {
   const pending = getPendingRegularKey(address);
   if (!pending) throw new Error('No pending regular key for this address. Call /wallet/setup-regular-key first.');
 
@@ -72,6 +72,7 @@ export function registerCard(uid: string, address: string, name?: string) {
     address,
     regularKeySeed: pending.seed,
     name: name || 'Customer',
+    current_ctr: initialCtr,
   });
 
   // Also store in user state
@@ -87,6 +88,28 @@ export function registerCard(uid: string, address: string, name?: string) {
   deletePendingRegularKey(address);
 
   return { registered: true, uid };
+}
+
+// Demo/testing fallback: submit the SetRegularKey tx directly using master seed.
+// In production, the user signs this in Xaman via /xaman/payload.
+export async function submitRegularKey(address: string, seed: string) {
+  const client = await getClient();
+  const masterWallet = Wallet.fromSeed(seed);
+  const pending = getPendingRegularKey(address);
+  if (!pending) throw new Error('No pending regular key. Call /wallet/setup-regular-key first.');
+
+  const regularKeyWallet = Wallet.fromSeed(pending.seed);
+  const setRegKeyTx: any = {
+    TransactionType: 'SetRegularKey',
+    Account: masterWallet.address,
+    RegularKey: regularKeyWallet.classicAddress,
+  };
+
+  const prepared = await client.autofill(setRegKeyTx);
+  const signed = masterWallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  return { txHash: result.result.hash };
 }
 
 // Revoke a card: disables regular key on-chain + deletes UID mapping.

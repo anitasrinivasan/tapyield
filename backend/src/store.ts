@@ -11,10 +11,11 @@ export const setUser = (address: string, state: UserState): void => {
 // Card registry — maps NFC hardware UID to customer wallet info
 // The UID is read-only on the NFC tag — nothing is written to the card
 export interface CardEntry {
-  uid: string;         // NFC hardware UID (read from tag)
-  address: string;     // Customer's XRPL wallet address
+  uid: string;            // NFC hardware UID (read from tag)
+  address: string;        // Customer's XRPL wallet address
   regularKeySeed: string; // Regular key seed (never leaves the server)
   name: string;
+  current_ctr: number;    // Last seen NFC counter value — anti-replay
 }
 
 const cards = new Map<string, CardEntry>();
@@ -26,6 +27,11 @@ export const setCard = (uid: string, entry: CardEntry): void => {
 };
 
 export const deleteCard = (uid: string): boolean => cards.delete(uid);
+
+export const updateCardCtr = (uid: string, ctr: number): void => {
+  const c = cards.get(uid);
+  if (c) cards.set(uid, { ...c, current_ctr: ctr });
+};
 
 // Find card by address (for revocation)
 export const findCardByAddress = (address: string): CardEntry | undefined => {

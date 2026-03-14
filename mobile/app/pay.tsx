@@ -6,13 +6,16 @@ import {
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tapPayment } from '../services/api';
+import { readNfcCard } from '../services/nfc';
 
 const XRP_TO_USD = 2.50;
 
 export default function Pay() {
   const [cardUid, setCardUid] = useState('');
+  const [cardCtr, setCardCtr] = useState(0);
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [cardDetected, setCardDetected] = useState(false);
   const [customerName, setCustomerName] = useState('');
 
@@ -31,9 +34,9 @@ export default function Pay() {
       if (!stored) throw new Error('No merchant wallet found');
       const merchantWallet = JSON.parse(stored);
 
-      // Send card UID + merchant address to backend
-      // Backend resolves card UID → customer wallet, processes payment
-      const result = await tapPayment(cardUid, merchantWallet.address, amount);
+      // Send card UID + NFC counter + merchant address to backend.
+      // Backend resolves card UID → customer wallet internally (regular key never exposed).
+      const result = await tapPayment(cardUid, cardCtr, merchantWallet.address, amount);
       const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
       Alert.alert(
         'Payment Received!',
@@ -52,28 +55,34 @@ export default function Pay() {
 
   const resetCard = () => {
     setCardUid('');
+    setCardCtr(0);
     setCardDetected(false);
     setCustomerName('');
   };
 
-  // NFC card tap handler — Alex replaces with real NFC reading
-  const handleCardTap = () => {
-    Alert.alert(
-      'Ready to Scan',
-      'Ask the customer to tap their TapYield card.\n\nFor demo: paste card UID below.',
-    );
+  // Read NTAG216 hardware UID + tap counter via NfcA
+  const handleCardTap = async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      const { uid, ctr } = await readNfcCard();
+      onCardRead(uid, ctr);
+    } catch (err: any) {
+      Alert.alert('Scan Failed', err?.message || 'Could not read card. Try again.');
+    } finally {
+      setScanning(false);
+    }
   };
 
-  // Called by Alex's NFC module when a customer's card is read.
-  // The NFC card contains only a UUID — no secrets.
-  // Alex: call onCardRead(cardUid) when NFC tag is read.
-  const onCardRead = (id: string, name?: string) => {
+  // Called when NFC card is successfully read (or via manual entry in demo mode)
+  const onCardRead = (id: string, ctr: number, name?: string) => {
     setCardUid(id);
+    setCardCtr(ctr);
     setCardDetected(true);
     setCustomerName(name || 'Customer');
   };
 
-  // Expose for Alex's NFC integration
+  // Exposed for external NFC integrations: __tapyield_onCardRead(uid, ctr, name?)
   (globalThis as any).__tapyield_onCardRead = onCardRead;
 
   return (
@@ -105,6 +114,7 @@ export default function Pay() {
         <TouchableOpacity
           style={[styles.cardArea, cardDetected && styles.cardDetected]}
           onPress={cardDetected ? resetCard : handleCardTap}
+          disabled={scanning}
         >
           {cardDetected ? (
             <>
@@ -121,7 +131,9 @@ export default function Pay() {
               <View style={styles.cardIconContainer}>
                 <Text style={styles.cardIcon}>📶</Text>
               </View>
-              <Text style={styles.cardText}>Tap Customer's Card</Text>
+              <Text style={styles.cardText}>
+                {scanning ? 'Scanning…' : "Tap Customer's Card"}
+              </Text>
               <Text style={styles.cardSubtext}>NFC</Text>
             </>
           )}
@@ -138,7 +150,8 @@ export default function Pay() {
               value={cardUid}
               onChangeText={(text) => {
                 setCardUid(text);
-                if (text.length >= 36) setCardDetected(true);
+                // For demo: treat any 14+ char UID as detected; ctr defaults to 1
+                if (text.length >= 14) { setCardDetected(true); setCardCtr(1); }
               }}
               autoCapitalize="none"
             />

@@ -6,6 +6,7 @@ import poolRouter from './routes/pool';
 import goalRouter from './routes/goal';
 import paymentRouter from './routes/payment';
 import cardRouter from './routes/card';
+import xamanRouter from './routes/xaman';
 import { getClient, disconnectClient } from './services/xrplClient';
 import { setAmmConfig } from './store';
 
@@ -21,6 +22,7 @@ app.use('/pool', poolRouter);
 app.use('/goal', goalRouter);
 app.use('/payment', paymentRouter);
 app.use('/card', cardRouter);
+app.use('/xaman', xamanRouter);
 
 // Health check
 app.get('/health', (_req, res) => {
