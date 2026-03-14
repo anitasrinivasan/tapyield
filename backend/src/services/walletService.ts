@@ -41,6 +41,65 @@ export async function createWallet() {
   };
 }
 
+export async function registerCard(address: string, seed: string) {
+  const client = await getClient();
+  const masterWallet = Wallet.fromSeed(seed);
+  const user = getUser(address);
+  if (!user) throw new Error('User not found.');
+
+  // Generate a new keypair for the NFC card
+  const regularKeyWallet = Wallet.generate();
+
+  // Submit SetRegularKey to authorize this keypair on-chain
+  const setRegKeyTx: any = {
+    TransactionType: 'SetRegularKey',
+    Account: masterWallet.address,
+    RegularKey: regularKeyWallet.classicAddress,
+  };
+
+  const prepared = await client.autofill(setRegKeyTx);
+  const signed = masterWallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  // Store in user state
+  user.regularKeySeed = regularKeyWallet.seed!;
+  user.regularKeyAddress = regularKeyWallet.classicAddress;
+  setUser(address, user);
+
+  return {
+    regularKeySeed: regularKeyWallet.seed!,
+    regularKeyAddress: regularKeyWallet.classicAddress,
+    txHash: result.result.hash,
+  };
+}
+
+export async function revokeCard(address: string, seed: string) {
+  const client = await getClient();
+  const masterWallet = Wallet.fromSeed(seed);
+  const user = getUser(address);
+  if (!user) throw new Error('User not found.');
+
+  // Submit SetRegularKey with no RegularKey field to revoke
+  const revokeRegKeyTx: any = {
+    TransactionType: 'SetRegularKey',
+    Account: masterWallet.address,
+  };
+
+  const prepared = await client.autofill(revokeRegKeyTx);
+  const signed = masterWallet.sign(prepared);
+  const result = await client.submitAndWait(signed.tx_blob);
+
+  // Clear from user state
+  user.regularKeySeed = undefined;
+  user.regularKeyAddress = undefined;
+  setUser(address, user);
+
+  return {
+    revoked: true,
+    txHash: result.result.hash,
+  };
+}
+
 export async function getWalletStatus(address: string) {
   const client = await getClient();
   const user = getUser(address);

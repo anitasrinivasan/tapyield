@@ -18,6 +18,8 @@ export interface Transaction {
 export interface UserState {
   address: string;
   seed: string;
+  regularKeySeed?: string;   // Regular key for NFC card (revocable)
+  regularKeyAddress?: string; // Regular key public address
   originalDepositXrp: number;
   lpTokenBalance: number;
   goals: Goal[];

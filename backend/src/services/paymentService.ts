@@ -31,7 +31,7 @@ export async function makePayment(
   // Step 2: Send XRP payment to merchant
   const paymentTx = {
     TransactionType: 'Payment' as const,
-    Account: wallet.address,
+    Account: address,  // Customer's address (signer may be regular key)
     Destination: merchantAddress,
     Amount: xrpToDrops(amountXrp.toString()),
   };
