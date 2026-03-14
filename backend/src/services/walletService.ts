@@ -1,6 +1,7 @@
 import { Wallet, xrpToDrops } from 'xrpl';
+import crypto from 'crypto';
 import { getClient } from './xrplClient';
-import { getUser, setUser, ammConfig } from '../store';
+import { getUser, setUser, ammConfig, setCard, deleteCard, findCardByAddress } from '../store';
 import { UserState } from '../types';
 import { getAmmPositionXrpValue } from './ammService';
 
@@ -41,7 +42,7 @@ export async function createWallet() {
   };
 }
 
-export async function registerCard(address: string, seed: string) {
+export async function registerCard(address: string, seed: string, name?: string) {
   const client = await getClient();
   const masterWallet = Wallet.fromSeed(seed);
   const user = getUser(address);
@@ -61,14 +62,23 @@ export async function registerCard(address: string, seed: string) {
   const signed = masterWallet.sign(prepared);
   const result = await client.submitAndWait(signed.tx_blob);
 
-  // Store in user state
+  // Store regular key in user state
   user.regularKeySeed = regularKeyWallet.seed!;
   user.regularKeyAddress = regularKeyWallet.classicAddress;
   setUser(address, user);
 
-  return {
+  // Generate a UUID and store card mapping on the backend
+  // The UUID is all that goes on the NFC card — no secrets leave the server
+  const cardId = crypto.randomUUID();
+  setCard(cardId, {
+    cardId,
+    address,
     regularKeySeed: regularKeyWallet.seed!,
-    regularKeyAddress: regularKeyWallet.classicAddress,
+    name: name || 'Customer',
+  });
+
+  return {
+    cardId,
     txHash: result.result.hash,
   };
 }
@@ -88,6 +98,10 @@ export async function revokeCard(address: string, seed: string) {
   const prepared = await client.autofill(revokeRegKeyTx);
   const signed = masterWallet.sign(prepared);
   const result = await client.submitAndWait(signed.tx_blob);
+
+  // Delete card mapping from registry
+  const card = findCardByAddress(address);
+  if (card) deleteCard(card.cardId);
 
   // Clear from user state
   user.regularKeySeed = undefined;

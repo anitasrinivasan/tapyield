@@ -10,8 +10,7 @@ import { tapPayment } from '../services/api';
 const XRP_TO_USD = 2.50;
 
 export default function Pay() {
-  const [customerAddress, setCustomerAddress] = useState('');
-  const [customerSeed, setCustomerSeed] = useState('');
+  const [cardId, setCardId] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [cardDetected, setCardDetected] = useState(false);
@@ -20,7 +19,7 @@ export default function Pay() {
   const usdEquiv = amount ? `$${(parseFloat(amount) * XRP_TO_USD).toFixed(2)}` : '';
 
   const handleCharge = async () => {
-    if (!customerAddress || !amount || parseFloat(amount) <= 0) {
+    if (!cardId || !amount || parseFloat(amount) <= 0) {
       Alert.alert('Error', 'Scan a customer card and enter an amount');
       return;
     }
@@ -32,17 +31,13 @@ export default function Pay() {
       if (!stored) throw new Error('No merchant wallet found');
       const merchantWallet = JSON.parse(stored);
 
-      // Payment flows: customer's wallet → merchant's wallet
-      const result = await tapPayment(
-        customerAddress,
-        customerSeed,
-        merchantWallet.address,
-        amount,
-      );
+      // Send card UUID + merchant address to backend
+      // Backend resolves card UUID → customer wallet, processes payment
+      const result = await tapPayment(cardId, merchantWallet.address, amount);
       const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
       Alert.alert(
         'Payment Received!',
-        `$${usdAmt} received from customer.\nSettled instantly on-chain.`,
+        `$${usdAmt} received from ${result.customerName || 'customer'}.\nSettled instantly on-chain.`,
         [
           { text: 'View on Explorer', onPress: () => Linking.openURL(`https://testnet.xrpl.org/transactions/${result.txHash}`) },
           { text: 'Done', onPress: () => { resetCard(); router.back(); } },
@@ -56,8 +51,7 @@ export default function Pay() {
   };
 
   const resetCard = () => {
-    setCustomerAddress('');
-    setCustomerSeed('');
+    setCardId('');
     setCardDetected(false);
     setCustomerName('');
   };
@@ -66,16 +60,15 @@ export default function Pay() {
   const handleCardTap = () => {
     Alert.alert(
       'Ready to Scan',
-      'Ask the customer to tap their TapYield card.\n\nFor demo: paste customer wallet details below.',
+      'Ask the customer to tap their TapYield card.\n\nFor demo: paste card UUID below.',
     );
   };
 
   // Called by Alex's NFC module when a customer's card is read.
-  // The NFC card contains the customer's wallet address + auth credentials.
-  // Alex: call onCardRead(address, seed, name) when NFC tag is read.
-  const onCardRead = (address: string, seed: string, name?: string) => {
-    setCustomerAddress(address);
-    setCustomerSeed(seed);
+  // The NFC card contains only a UUID — no secrets.
+  // Alex: call onCardRead(cardId) when NFC tag is read.
+  const onCardRead = (id: string, name?: string) => {
+    setCardId(id);
     setCardDetected(true);
     setCustomerName(name || 'Customer');
   };
@@ -118,8 +111,8 @@ export default function Pay() {
               <Text style={styles.cardIconDetected}>✓</Text>
               <Text style={styles.cardTextDetected}>Card Detected</Text>
               <Text style={styles.cardCustomer}>{customerName}</Text>
-              <Text style={styles.cardAddress}>
-                {customerAddress.slice(0, 8)}...{customerAddress.slice(-6)}
+              <Text style={styles.cardId}>
+                {cardId.slice(0, 8)}...
               </Text>
               <Text style={styles.cardTapAgain}>Tap to reset</Text>
             </>
@@ -140,23 +133,14 @@ export default function Pay() {
             <Text style={styles.manualLabel}>Demo: Manual Entry</Text>
             <TextInput
               style={styles.input}
-              placeholder="Customer wallet address (rXXX...)"
+              placeholder="Card UUID"
               placeholderTextColor="#4a5568"
-              value={customerAddress}
-              onChangeText={setCustomerAddress}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, { marginTop: 8 }]}
-              placeholder="Customer seed (sXXX...)"
-              placeholderTextColor="#4a5568"
-              value={customerSeed}
+              value={cardId}
               onChangeText={(text) => {
-                setCustomerSeed(text);
-                if (text && customerAddress) setCardDetected(true);
+                setCardId(text);
+                if (text.length >= 36) setCardDetected(true);
               }}
               autoCapitalize="none"
-              secureTextEntry
             />
           </>
         )}
@@ -222,7 +206,7 @@ const styles = StyleSheet.create({
   cardTextDetected: { color: '#00e676', fontSize: 18, fontWeight: '700' },
   cardSubtext: { color: '#4a5568', fontSize: 12, marginTop: 4 },
   cardCustomer: { color: '#ccd6f6', fontSize: 16, fontWeight: '600', marginTop: 4 },
-  cardAddress: { color: '#8892b0', fontSize: 12, fontFamily: 'monospace', marginTop: 4 },
+  cardId: { color: '#8892b0', fontSize: 12, fontFamily: 'monospace', marginTop: 4 },
   cardTapAgain: { color: '#4a5568', fontSize: 11, marginTop: 8 },
 
   manualLabel: { color: '#4a5568', fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },

@@ -30,12 +30,12 @@ router.get('/status', async (req: Request, res: Response) => {
 
 router.post('/register-card', async (req: Request, res: Response) => {
   try {
-    const { address, seed } = req.body;
+    const { address, seed, name } = req.body;
     if (!address || !seed) {
       res.status(400).json({ error: 'address and seed required' });
       return;
     }
-    const result = await registerCard(address, seed);
+    const result = await registerCard(address, seed, name);
     res.json(result);
   } catch (err: any) {
     console.error('Register card error:', err);
