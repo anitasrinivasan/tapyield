@@ -27,7 +27,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // Safe name-only lookup — shows customer name on NFC tap without exposing secrets.
 router.get('/:uid/name', (req: Request, res: Response) => {
-  const card = getCard(req.params.uid);
+  const card = getCard(req.params.uid as string);
   if (!card) {
     res.status(404).json({ error: 'Card not found' });
     return;
