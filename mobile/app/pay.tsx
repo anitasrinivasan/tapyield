@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { tapPayment } from '../services/api';
+import { tapPayment, getCardName } from '../services/api';
 
 const XRP_TO_USD = 2.50;
 
@@ -67,10 +67,20 @@ export default function Pay() {
   // Called by Alex's NFC module when a customer's card is read.
   // The NFC card contains only a UUID — no secrets.
   // Alex: call onCardRead(cardUid) when NFC tag is read.
-  const onCardRead = (id: string, name?: string) => {
+  const onCardRead = async (id: string, name?: string) => {
     setCardUid(id);
     setCardDetected(true);
-    setCustomerName(name || 'Customer');
+    if (name) {
+      setCustomerName(name);
+    } else {
+      // Fetch customer name from backend
+      try {
+        const fetchedName = await getCardName(id);
+        setCustomerName(fetchedName);
+      } catch {
+        setCustomerName('Customer');
+      }
+    }
   };
 
   // Expose for Alex's NFC integration

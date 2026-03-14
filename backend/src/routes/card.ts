@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { registerCard } from '../services/walletService';
+import { getCard } from '../store';
 
 const router = Router();
 
@@ -22,6 +23,16 @@ router.post('/register', async (req: Request, res: Response) => {
     console.error('Card register error:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// Safe name-only lookup — shows customer name on NFC tap without exposing secrets.
+router.get('/:uid/name', (req: Request, res: Response) => {
+  const card = getCard(req.params.uid);
+  if (!card) {
+    res.status(404).json({ error: 'Card not found' });
+    return;
+  }
+  res.json({ name: card.name });
 });
 
 export default router;

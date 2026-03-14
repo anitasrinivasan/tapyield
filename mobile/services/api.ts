@@ -81,6 +81,36 @@ export async function tapPayment(
   return data;
 }
 
+export async function setupRegularKey(address: string) {
+  const { data } = await api.post('/wallet/setup-regular-key', { address });
+  return data;
+}
+
+export async function registerCard(uid: string, address: string, name: string) {
+  const { data } = await api.post('/card/register', { uid, address, name });
+  return data;
+}
+
+export async function getCardName(uid: string): Promise<string> {
+  const { data } = await api.get(`/card/${uid}/name`);
+  return data.name;
+}
+
+export async function xamanSignIn() {
+  const { data } = await api.post('/xaman/signin');
+  return data;
+}
+
+export async function xamanSetRegularKey(account: string, regularKeyAddress: string) {
+  const { data } = await api.post('/xaman/set-regular-key', { account, regularKeyAddress });
+  return data;
+}
+
+export async function xamanGetPayloadStatus(uuid: string) {
+  const { data } = await api.get(`/xaman/payload/${uuid}`);
+  return data;
+}
+
 export function setApiBase(url: string) {
   api.defaults.baseURL = url;
 }
