@@ -36,7 +36,7 @@ export default function CreateGoal() {
       const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
       Alert.alert(
         'Goal Created!',
-        `$${usdAmt} locked until ${new Date(unlockDate).toLocaleTimeString()}\n\nYour funds will keep earning yield while locked.\nEscrow commitment recorded on-chain.`,
+        `$${usdAmt} locked until ${new Date(unlockDate).toLocaleTimeString()}\n\nYour funds will keep earning yield while locked.\nSavings goal recorded on-chain.`,
         [
           { text: 'View Escrow', onPress: () => Linking.openURL(`https://testnet.xrpl.org/transactions/${result.escrowTxHash}`) },
           { text: 'Done', onPress: () => router.back() },
@@ -54,7 +54,7 @@ export default function CreateGoal() {
       <View style={styles.content}>
         <Text style={styles.title}>Create Savings Goal</Text>
         <Text style={styles.subtitle}>
-          Commit to saving — your funds keep earning yield while locked
+          Set a goal — your funds keep earning yield while locked
         </Text>
 
         <Text style={styles.label}>Goal Name</Text>
