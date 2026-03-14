@@ -1,12 +1,12 @@
 export const colors = {
-  background: '#F5F0EB',
+  background: '#E6E6E6',
   card: '#FFFFFF',
-  cardDark: '#2C2C2C',
-  text: '#1A1A1A',
+  cardDark: '#070707',
+  text: '#000000',
   textMuted: '#8A8A8A',
   textLight: '#B0B0B0',
-  border: '#E5E0DB',
-  accent: '#1A1A1A',
+  border: '#E6E6E6',
+  accent: '#070707',
   success: '#2E7D32',
   white: '#FFFFFF',
 };

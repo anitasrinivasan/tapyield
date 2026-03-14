@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ActivityIndicator,
-  StyleSheet, SafeAreaView, Alert, Linking,
+  View, Text, TouchableOpacity, ActivityIndicator, TextInput,
+  StyleSheet, SafeAreaView, Alert, Linking, KeyboardAvoidingView,
+  TouchableWithoutFeedback, Keyboard, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { depositToPool } from '../services/api';
 import { colors, XRP_TO_USD } from './theme';
-import NumberPad from '../components/NumberPad';
 
 export default function Deposit() {
   const [amount, setAmount] = useState('');
@@ -16,16 +16,12 @@ export default function Deposit() {
   const displayAmount = amount ? `$${amount}` : '$0.00';
   const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
 
-  const handleNumberPad = (key: string) => {
-    if (key === '⌫') {
-      setAmount((prev) => prev.slice(0, -1));
-    } else if (key === '.') {
-      if (!amount.includes('.')) setAmount((prev) => prev + '.');
-    } else {
-      const parts = amount.split('.');
-      if (parts[1] && parts[1].length >= 2) return;
-      setAmount((prev) => prev + key);
-    }
+  const handleAmountChange = (text: string) => {
+    const cleaned = text.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) return;
+    if (parts[1] && parts[1].length > 2) return;
+    setAmount(cleaned);
   };
 
   const handleDeposit = async () => {
@@ -34,6 +30,7 @@ export default function Deposit() {
       return;
     }
 
+    Keyboard.dismiss();
     setLoading(true);
     try {
       const stored = await AsyncStorage.getItem('wallet');
@@ -58,52 +55,66 @@ export default function Deposit() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Add Funds</Text>
-        <Text style={styles.subtitle}>Your funds start earning yield immediately</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.flex}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.content}>
+            <Text style={styles.title}>Add Funds</Text>
+            <Text style={styles.subtitle}>Your funds start earning yield immediately</Text>
 
-        <View style={styles.amountSection}>
-          <Text style={styles.label}>DEPOSIT AMOUNT</Text>
-          <Text style={[styles.amountDisplay, amount ? styles.amountActive : null]}>
-            {displayAmount}
-          </Text>
-          {amount ? <Text style={styles.xrpEquiv}>{xrpAmount} XRP</Text> : null}
-        </View>
+            <View style={styles.amountSection}>
+              <Text style={styles.label}>DEPOSIT AMOUNT</Text>
+              <TextInput
+                style={[styles.amountInput, amount ? styles.amountActive : null]}
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={handleAmountChange}
+                placeholder="0.00"
+                placeholderTextColor={colors.textLight}
+                autoFocus
+              />
+              {amount ? <Text style={styles.xrpEquiv}>{xrpAmount} XRP</Text> : null}
+            </View>
 
-        <NumberPad onPress={handleNumberPad} />
+            <View style={styles.spacer} />
 
-        <View style={styles.bottomAction}>
-          <TouchableOpacity
-            style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0 || loading) && styles.btnDisabled]}
-            onPress={handleDeposit}
-            disabled={!amount || parseFloat(amount) <= 0 || loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.primaryBtnText}>Deposit {displayAmount}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0 || loading) && styles.btnDisabled]}
+              onPress={handleDeposit}
+              disabled={!amount || parseFloat(amount) <= 0 || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Deposit {amount ? `$${amount}` : ''}</Text>
+              )}
+            </TouchableOpacity>
+            <View style={styles.bottomPad} />
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1, paddingTop: 12 },
+  flex: { flex: 1 },
+  content: { flex: 1, paddingTop: 12, paddingHorizontal: 24 },
 
-  title: { fontSize: 28, fontWeight: '700', color: colors.text, paddingHorizontal: 24, marginBottom: 8 },
-  subtitle: { color: colors.textMuted, fontSize: 14, paddingHorizontal: 24, marginBottom: 32 },
+  title: { fontSize: 28, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  subtitle: { color: colors.textMuted, fontSize: 14, marginBottom: 32 },
 
-  amountSection: { paddingHorizontal: 24, marginBottom: 32 },
+  amountSection: { marginBottom: 20 },
   label: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  amountDisplay: { fontSize: 48, fontWeight: '300', color: colors.textLight },
+  amountInput: { fontSize: 48, fontWeight: '300', color: colors.textLight, padding: 0 },
   amountActive: { color: colors.text },
   xrpEquiv: { color: colors.textMuted, fontSize: 14, marginTop: 4 },
 
-  bottomAction: { position: 'absolute', bottom: 40, left: 24, right: 24 },
+  spacer: { flex: 1 },
+  bottomPad: { height: 40 },
   primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
   btnDisabled: { opacity: 0.3 },
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },

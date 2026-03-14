@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, ActivityIndicator, TextInput,
-  StyleSheet, SafeAreaView, Alert, Linking,
+  StyleSheet, SafeAreaView, Alert, Linking, KeyboardAvoidingView,
+  TouchableWithoutFeedback, Keyboard, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tapPayment, getCardName } from '../services/api';
 import { colors, XRP_TO_USD } from './theme';
-import NumberPad from '../components/NumberPad';
 
 type PayState = 'amount' | 'nfc' | 'processing' | 'success';
 
@@ -22,16 +22,13 @@ export default function Pay() {
   const displayAmount = amount ? `$${amount}` : '$0.00';
   const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
 
-  const handleNumberPad = (key: string) => {
-    if (key === '⌫') {
-      setAmount((prev) => prev.slice(0, -1));
-    } else if (key === '.') {
-      if (!amount.includes('.')) setAmount((prev) => prev + '.');
-    } else {
-      const parts = amount.split('.');
-      if (parts[1] && parts[1].length >= 2) return;
-      setAmount((prev) => prev + key);
-    }
+  const handleAmountChange = (text: string) => {
+    // Allow only valid decimal input
+    const cleaned = text.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) return; // multiple dots
+    if (parts[1] && parts[1].length > 2) return; // more than 2 decimal places
+    setAmount(cleaned);
   };
 
   const handleReadyForPayment = () => {
@@ -39,6 +36,7 @@ export default function Pay() {
       Alert.alert('Enter an amount');
       return;
     }
+    Keyboard.dismiss();
     setState('nfc');
   };
 
@@ -91,33 +89,47 @@ export default function Pay() {
   return (
     <SafeAreaView style={styles.container}>
       {state === 'amount' && (
-        <View style={styles.content}>
-          <TextInput
-            style={styles.merchantInput}
-            placeholder="Merchant Name"
-            placeholderTextColor={colors.textLight}
-            value={merchantName}
-            onChangeText={setMerchantName}
-            autoCapitalize="words"
-            returnKeyType="done"
-          />
-          <View style={styles.amountSection}>
-            <Text style={styles.amountLabel}>PAYMENT AMOUNT</Text>
-            <Text style={[styles.amountDisplay, amount ? styles.amountActive : null]}>
-              {displayAmount}
-            </Text>
-          </View>
-          <NumberPad onPress={handleNumberPad} />
-          <View style={styles.bottomAction}>
-            <TouchableOpacity
-              style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0) && styles.btnDisabled]}
-              onPress={handleReadyForPayment}
-              disabled={!amount || parseFloat(amount) <= 0}
-            >
-              <Text style={styles.primaryBtnText}>Ready for Payment</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.content}>
+              <TextInput
+                style={styles.merchantInput}
+                placeholder="Merchant Name"
+                placeholderTextColor={colors.textLight}
+                value={merchantName}
+                onChangeText={setMerchantName}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+
+              <View style={styles.amountSection}>
+                <Text style={styles.amountLabel}>PAYMENT AMOUNT</Text>
+                <TextInput
+                  style={[styles.amountInput, amount ? styles.amountActive : null]}
+                  keyboardType="decimal-pad"
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textLight}
+                />
+              </View>
+
+              <View style={styles.spacer} />
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0) && styles.btnDisabled]}
+                onPress={handleReadyForPayment}
+                disabled={!amount || parseFloat(amount) <= 0}
+              >
+                <Text style={styles.primaryBtnText}>Ready for Payment</Text>
+              </TouchableOpacity>
+              <View style={styles.bottomPad} />
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       )}
 
       {state === 'nfc' && (
@@ -151,11 +163,11 @@ export default function Pay() {
               </>
             ) : null}
           </View>
-          <View style={styles.bottomAction}>
-            <TouchableOpacity style={styles.primaryBtn} onPress={resetPayment}>
-              <Text style={styles.primaryBtnText}>+ New Payment</Text>
-            </TouchableOpacity>
-          </View>
+          <View style={styles.spacer} />
+          <TouchableOpacity style={styles.primaryBtn} onPress={resetPayment}>
+            <Text style={styles.primaryBtnText}>+ New Payment</Text>
+          </TouchableOpacity>
+          <View style={styles.bottomPad} />
         </View>
       )}
     </SafeAreaView>
@@ -164,19 +176,22 @@ export default function Pay() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1, paddingTop: 20 },
+  flex: { flex: 1 },
+  content: { flex: 1, paddingTop: 20, paddingHorizontal: 24 },
 
   merchantInput: {
-    fontSize: 16, color: colors.text, fontWeight: '500', paddingHorizontal: 24,
-    marginBottom: 40, paddingVertical: 8,
+    fontSize: 16, color: colors.text, fontWeight: '500',
+    marginBottom: 40, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
 
-  amountSection: { alignItems: 'flex-start', paddingHorizontal: 24, marginBottom: 40 },
+  amountSection: { marginBottom: 20 },
   amountLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  amountDisplay: { fontSize: 48, fontWeight: '300', color: colors.textLight },
+  amountInput: { fontSize: 48, fontWeight: '300', color: colors.textLight, padding: 0 },
   amountActive: { color: colors.text },
 
-  bottomAction: { position: 'absolute', bottom: 40, left: 24, right: 24 },
+  spacer: { flex: 1 },
+  bottomPad: { height: 40 },
   primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
   btnDisabled: { opacity: 0.3 },
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },

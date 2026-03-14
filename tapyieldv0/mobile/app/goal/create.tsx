@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
-  StyleSheet, SafeAreaView, Alert,
+  StyleSheet, SafeAreaView, Alert, KeyboardAvoidingView,
+  TouchableWithoutFeedback, Keyboard, Platform, ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createGoal } from '../../services/api';
 import { colors, XRP_TO_USD } from '../theme';
-import NumberPad from '../../components/NumberPad';
 
 type GoalState = 'input' | 'loading' | 'success';
 
@@ -20,19 +20,18 @@ export default function CreateGoal() {
   const [resultName, setResultName] = useState('');
   const [resultDays, setResultDays] = useState(0);
 
+  const amountRef = useRef<TextInput>(null);
+  const daysRef = useRef<TextInput>(null);
+
   const displayAmount = amount ? `$${amount}` : '$0.00';
   const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
 
-  const handleNumberPad = (key: string) => {
-    if (key === '⌫') {
-      setAmount((prev) => prev.slice(0, -1));
-    } else if (key === '.') {
-      if (!amount.includes('.')) setAmount((prev) => prev + '.');
-    } else {
-      const parts = amount.split('.');
-      if (parts[1] && parts[1].length >= 2) return;
-      setAmount((prev) => prev + key);
-    }
+  const handleAmountChange = (text: string) => {
+    const cleaned = text.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) return;
+    if (parts[1] && parts[1].length > 2) return;
+    setAmount(cleaned);
   };
 
   const handleCreate = async () => {
@@ -40,6 +39,7 @@ export default function CreateGoal() {
     if (!amount || parseFloat(amount) <= 0) { Alert.alert('Enter an amount'); return; }
     if (!days || parseInt(days) <= 0) { Alert.alert('Enter days to lock'); return; }
 
+    Keyboard.dismiss();
     setState('loading');
     try {
       const stored = await AsyncStorage.getItem('wallet');
@@ -64,51 +64,67 @@ export default function CreateGoal() {
   return (
     <SafeAreaView style={styles.container}>
       {state === 'input' && (
-        <View style={styles.content}>
-          <View style={styles.nameRow}>
-            <Text style={styles.nameIcon}>🎯</Text>
-            <TextInput
-              style={styles.nameInput}
-              placeholder="Goal Name"
-              placeholderTextColor={colors.textLight}
-              value={name}
-              onChangeText={setName}
-            />
-          </View>
-
-          <View style={styles.amountSection}>
-            <Text style={styles.label}>GOAL AMOUNT</Text>
-            <Text style={[styles.amountDisplay, amount ? styles.amountActive : null]}>
-              {displayAmount}
-            </Text>
-          </View>
-
-          <NumberPad onPress={handleNumberPad} />
-
-          <View style={styles.daysRow}>
-            <Text style={styles.daysText}>Goal unlocks in</Text>
-            <TextInput
-              style={styles.daysInput}
-              placeholder="0"
-              placeholderTextColor={colors.textLight}
-              keyboardType="number-pad"
-              value={days}
-              onChangeText={setDays}
-              maxLength={3}
-            />
-            <Text style={styles.daysText}>days</Text>
-          </View>
-
-          <View style={styles.bottomAction}>
-            <TouchableOpacity
-              style={[styles.primaryBtn, (!name || !amount || !days) && styles.btnDisabled]}
-              onPress={handleCreate}
-              disabled={!name || !amount || !days}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
             >
-              <Text style={styles.primaryBtnText}>Create Goal</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+              <TextInput
+                style={styles.nameInput}
+                placeholder="Goal Name"
+                placeholderTextColor={colors.textLight}
+                value={name}
+                onChangeText={setName}
+                returnKeyType="next"
+                onSubmitEditing={() => amountRef.current?.focus()}
+              />
+
+              <View style={styles.amountSection}>
+                <Text style={styles.label}>GOAL AMOUNT</Text>
+                <TextInput
+                  ref={amountRef}
+                  style={[styles.amountInput, amount ? styles.amountActive : null]}
+                  keyboardType="decimal-pad"
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textLight}
+                />
+              </View>
+
+              <View style={styles.daysRow}>
+                <Text style={styles.daysText}>Goal unlocks in</Text>
+                <TextInput
+                  ref={daysRef}
+                  style={styles.daysInput}
+                  placeholder="0"
+                  placeholderTextColor={colors.textLight}
+                  keyboardType="number-pad"
+                  value={days}
+                  onChangeText={setDays}
+                  maxLength={3}
+                />
+                <Text style={styles.daysText}>days</Text>
+              </View>
+
+              <View style={styles.spacer} />
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, (!name || !amount || !days) && styles.btnDisabled]}
+                onPress={handleCreate}
+                disabled={!name || !amount || !days}
+              >
+                <Text style={styles.primaryBtnText}>Create Goal</Text>
+              </TouchableOpacity>
+              <View style={styles.bottomPad} />
+            </ScrollView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       )}
 
       {state === 'loading' && (
@@ -123,7 +139,7 @@ export default function CreateGoal() {
         <View style={styles.centered}>
           <Text style={styles.lockIcon}>🔒</Text>
           <Text style={styles.successAmount}>{resultAmount}</Text>
-          <Text style={styles.successName}>🎯  {resultName}</Text>
+          <Text style={styles.successName}>{resultName}</Text>
 
           <View style={styles.successDetails}>
             <View style={styles.detailRow}>
@@ -140,11 +156,12 @@ export default function CreateGoal() {
             <View style={styles.progressFill} />
           </View>
 
-          <View style={styles.bottomAction}>
-            <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
-              <Text style={styles.doneBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
+          <View style={styles.spacer} />
+
+          <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+            <Text style={styles.doneBtnText}>Done</Text>
+          </TouchableOpacity>
+          <View style={styles.bottomPad} />
         </View>
       )}
     </SafeAreaView>
@@ -153,25 +170,28 @@ export default function CreateGoal() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1, paddingTop: 12 },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingTop: 12, paddingHorizontal: 24 },
 
-  nameRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 24, gap: 8 },
-  nameIcon: { fontSize: 20 },
-  nameInput: { flex: 1, fontSize: 18, color: colors.text, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 8 },
+  nameInput: {
+    fontSize: 18, color: colors.text, borderBottomWidth: 1,
+    borderBottomColor: colors.border, paddingBottom: 12, marginBottom: 32,
+  },
 
-  amountSection: { paddingHorizontal: 24, marginBottom: 24 },
+  amountSection: { marginBottom: 32 },
   label: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  amountDisplay: { fontSize: 48, fontWeight: '300', color: colors.textLight },
+  amountInput: { fontSize: 48, fontWeight: '300', color: colors.textLight, padding: 0 },
   amountActive: { color: colors.text },
 
-  daysRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, gap: 8, marginTop: 16 },
+  daysRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   daysText: { color: colors.textMuted, fontSize: 14 },
   daysInput: {
     fontSize: 16, fontWeight: '600', color: colors.text, borderBottomWidth: 1,
     borderBottomColor: colors.border, paddingBottom: 4, width: 40, textAlign: 'center',
   },
 
-  bottomAction: { position: 'absolute', bottom: 40, left: 24, right: 24 },
+  spacer: { flex: 1, minHeight: 40 },
+  bottomPad: { height: 40 },
   primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
   btnDisabled: { opacity: 0.3 },
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
@@ -192,6 +212,6 @@ const styles = StyleSheet.create({
   progressBar: { width: '80%', height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 24 },
   progressFill: { width: '2%', height: 4, backgroundColor: colors.accent, borderRadius: 2 },
 
-  doneBtn: { backgroundColor: colors.card, borderRadius: 24, paddingVertical: 16, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  doneBtn: { backgroundColor: colors.card, borderRadius: 24, paddingVertical: 16, alignItems: 'center', width: '100%', borderWidth: 1, borderColor: colors.border },
   doneBtnText: { color: colors.text, fontSize: 16, fontWeight: '600' },
 });
