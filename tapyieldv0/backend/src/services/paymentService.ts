@@ -7,7 +7,8 @@ export async function makePayment(
   address: string,
   seed: string,
   merchantAddress: string,
-  amountXrp: number
+  amountXrp: number,
+  merchantName?: string
 ) {
   const client = await getClient();
   const wallet = Wallet.fromSeed(seed);
@@ -31,7 +32,7 @@ export async function makePayment(
   // Step 2: Send XRP payment to merchant
   const paymentTx = {
     TransactionType: 'Payment' as const,
-    Account: wallet.address,
+    Account: address,  // Customer's address (signer may be regular key)
     Destination: merchantAddress,
     Amount: xrpToDrops(amountXrp.toString()),
   };
@@ -45,6 +46,7 @@ export async function makePayment(
     amount: amountXrp,
     txHash: result.result.hash,
     timestamp: new Date().toISOString(),
+    merchantName,
   });
   setUser(address, user);
 

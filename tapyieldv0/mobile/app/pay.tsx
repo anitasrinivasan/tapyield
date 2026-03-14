@@ -1,241 +1,194 @@
 import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ActivityIndicator,
+  View, Text, TouchableOpacity, ActivityIndicator, TextInput,
   StyleSheet, SafeAreaView, Alert, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { tapPayment } from '../services/api';
+import { tapPayment, getCardName } from '../services/api';
+import { colors, XRP_TO_USD } from './theme';
+import NumberPad from '../components/NumberPad';
 
-const XRP_TO_USD = 2.50;
+type PayState = 'amount' | 'nfc' | 'processing' | 'success';
 
 export default function Pay() {
-  const [customerAddress, setCustomerAddress] = useState('');
-  const [customerSeed, setCustomerSeed] = useState('');
+  const [state, setState] = useState<PayState>('amount');
   const [amount, setAmount] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [cardDetected, setCardDetected] = useState(false);
+  const [cardUid, setCardUid] = useState('');
+  const [txHash, setTxHash] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [merchantName, setMerchantName] = useState('');
 
-  const usdEquiv = amount ? `$${(parseFloat(amount) * XRP_TO_USD).toFixed(2)}` : '';
+  const displayAmount = amount ? `$${amount}` : '$0.00';
+  const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
 
-  const handleCharge = async () => {
-    if (!customerAddress || !amount || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Scan a customer card and enter an amount');
+  const handleNumberPad = (key: string) => {
+    if (key === '⌫') {
+      setAmount((prev) => prev.slice(0, -1));
+    } else if (key === '.') {
+      if (!amount.includes('.')) setAmount((prev) => prev + '.');
+    } else {
+      const parts = amount.split('.');
+      if (parts[1] && parts[1].length >= 2) return;
+      setAmount((prev) => prev + key);
+    }
+  };
+
+  const handleReadyForPayment = () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Enter an amount');
       return;
     }
+    setState('nfc');
+  };
 
-    setLoading(true);
+  // Called by Alex's NFC module when a customer's card is read
+  const onCardRead = async (id: string) => {
+    setCardUid(id);
     try {
-      // Merchant's wallet is in AsyncStorage — they are the payment receiver
-      const stored = await AsyncStorage.getItem('wallet');
-      if (!stored) throw new Error('No merchant wallet found');
-      const merchantWallet = JSON.parse(stored);
-
-      // Payment flows: customer's wallet → merchant's wallet
-      const result = await tapPayment(
-        customerAddress,
-        customerSeed,
-        merchantWallet.address,
-        amount,
-      );
-      const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
-      Alert.alert(
-        'Payment Received!',
-        `$${usdAmt} received from customer.\nSettled instantly on-chain.`,
-        [
-          { text: 'View on Explorer', onPress: () => Linking.openURL(`https://testnet.xrpl.org/transactions/${result.txHash}`) },
-          { text: 'Done', onPress: () => { resetCard(); router.back(); } },
-        ]
-      );
-    } catch (err: any) {
-      Alert.alert('Payment Failed', err.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
+      const name = await getCardName(id);
+      setCustomerName(name);
+    } catch {
+      setCustomerName('Customer');
     }
-  };
-
-  const resetCard = () => {
-    setCustomerAddress('');
-    setCustomerSeed('');
-    setCardDetected(false);
-    setCustomerName('');
-  };
-
-  // NFC card tap handler — Alex replaces with real NFC reading
-  const handleCardTap = () => {
-    Alert.alert(
-      'Ready to Scan',
-      'Ask the customer to tap their TapYield card.\n\nFor demo: paste customer wallet details below.',
-    );
-  };
-
-  // Called by Alex's NFC module when a customer's card is read.
-  // The NFC card contains the customer's wallet address + auth credentials.
-  // Alex: call onCardRead(address, seed, name) when NFC tag is read.
-  const onCardRead = (address: string, seed: string, name?: string) => {
-    setCustomerAddress(address);
-    setCustomerSeed(seed);
-    setCardDetected(true);
-    setCustomerName(name || 'Customer');
+    processPayment(id);
   };
 
   // Expose for Alex's NFC integration
   (globalThis as any).__tapyield_onCardRead = onCardRead;
 
+  const processPayment = async (uid: string) => {
+    setState('processing');
+    try {
+      const stored = await AsyncStorage.getItem('wallet');
+      if (!stored) throw new Error('No wallet found');
+      const merchantWallet = JSON.parse(stored);
+
+      const result = await tapPayment(uid, merchantWallet.address, xrpAmount, merchantName || undefined);
+      setTxHash(result.txHash || '');
+      if (result.customerName) setCustomerName(result.customerName);
+      setState('success');
+    } catch (err: any) {
+      Alert.alert('Payment Failed', err.response?.data?.error || err.message);
+      setState('nfc');
+    }
+  };
+
+  // Demo: simulate NFC tap
+  const simulateNfcTap = () => {
+    onCardRead('DEMO-UID-' + Date.now());
+  };
+
+  const resetPayment = () => {
+    setState('amount');
+    setAmount('');
+    setCardUid('');
+    setTxHash('');
+    setCustomerName('');
+    setMerchantName('');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Accept Payment</Text>
-        <Text style={styles.subtitle}>
-          Customer taps their card to pay
-        </Text>
-
-        {/* Amount — merchant enters what to charge */}
-        <Text style={styles.label}>Charge Amount</Text>
-        <TextInput
-          style={styles.amountInput}
-          placeholder="0.00"
-          placeholderTextColor="#4a5568"
-          keyboardType="decimal-pad"
-          value={amount}
-          onChangeText={setAmount}
-        />
-        {usdEquiv ? (
-          <Text style={styles.usdEquiv}>{usdEquiv} USD</Text>
-        ) : null}
-        {amount ? (
-          <Text style={styles.xrpEquiv}>{amount} XRP</Text>
-        ) : null}
-
-        {/* NFC Card Tap Area */}
-        <TouchableOpacity
-          style={[styles.cardArea, cardDetected && styles.cardDetected]}
-          onPress={cardDetected ? resetCard : handleCardTap}
-        >
-          {cardDetected ? (
-            <>
-              <Text style={styles.cardIconDetected}>✓</Text>
-              <Text style={styles.cardTextDetected}>Card Detected</Text>
-              <Text style={styles.cardCustomer}>{customerName}</Text>
-              <Text style={styles.cardAddress}>
-                {customerAddress.slice(0, 8)}...{customerAddress.slice(-6)}
-              </Text>
-              <Text style={styles.cardTapAgain}>Tap to reset</Text>
-            </>
-          ) : (
-            <>
-              <View style={styles.cardIconContainer}>
-                <Text style={styles.cardIcon}>📶</Text>
-              </View>
-              <Text style={styles.cardText}>Tap Customer's Card</Text>
-              <Text style={styles.cardSubtext}>NFC</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Manual entry fallback for demo */}
-        {!cardDetected && (
-          <>
-            <Text style={styles.manualLabel}>Demo: Manual Entry</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Customer wallet address (rXXX...)"
-              placeholderTextColor="#4a5568"
-              value={customerAddress}
-              onChangeText={setCustomerAddress}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, { marginTop: 8 }]}
-              placeholder="Customer seed (sXXX...)"
-              placeholderTextColor="#4a5568"
-              value={customerSeed}
-              onChangeText={(text) => {
-                setCustomerSeed(text);
-                if (text && customerAddress) setCardDetected(true);
-              }}
-              autoCapitalize="none"
-              secureTextEntry
-            />
-          </>
-        )}
-
-        <TouchableOpacity
-          style={[
-            styles.button,
-            (loading || !cardDetected || !amount) && styles.buttonDisabled,
-          ]}
-          onPress={handleCharge}
-          disabled={loading || !cardDetected || !amount}
-        >
-          {loading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color="#0a0e1a" />
-              <Text style={styles.buttonText}>  Processing...</Text>
-            </View>
-          ) : (
-            <Text style={styles.buttonText}>
-              Charge {usdEquiv || '$0.00'}
+      {state === 'amount' && (
+        <View style={styles.content}>
+          <TextInput
+            style={styles.merchantInput}
+            placeholder="Merchant Name"
+            placeholderTextColor={colors.textLight}
+            value={merchantName}
+            onChangeText={setMerchantName}
+            autoCapitalize="words"
+            returnKeyType="done"
+          />
+          <View style={styles.amountSection}>
+            <Text style={styles.amountLabel}>PAYMENT AMOUNT</Text>
+            <Text style={[styles.amountDisplay, amount ? styles.amountActive : null]}>
+              {displayAmount}
             </Text>
-          )}
-        </TouchableOpacity>
+          </View>
+          <NumberPad onPress={handleNumberPad} />
+          <View style={styles.bottomAction}>
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0) && styles.btnDisabled]}
+              onPress={handleReadyForPayment}
+              disabled={!amount || parseFloat(amount) <= 0}
+            >
+              <Text style={styles.primaryBtnText}>Ready for Payment</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
-        <Text style={styles.poweredBy}>
-          Settled instantly on the XRP Ledger
-        </Text>
-      </View>
+      {state === 'nfc' && (
+        <TouchableOpacity style={styles.centered} onPress={simulateNfcTap} activeOpacity={0.8}>
+          <ActivityIndicator size="large" color={colors.textMuted} />
+          <Text style={styles.stateLabel}>WAITING FOR NFC</Text>
+          <Text style={styles.stateDesc}>Hold customer's card{'\n'}near phone</Text>
+        </TouchableOpacity>
+      )}
+
+      {state === 'processing' && (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.textMuted} />
+          <Text style={styles.stateLabel}>LOADING</Text>
+          <Text style={styles.stateDesc}>Processing payment{'\n'}on XRPL...</Text>
+        </View>
+      )}
+
+      {state === 'success' && (
+        <View style={styles.centered}>
+          <Text style={styles.checkmark}>✓</Text>
+          <Text style={styles.successAmount}>{displayAmount}</Text>
+          <Text style={styles.successPaid}>paid</Text>
+          <View style={styles.txInfo}>
+            {txHash ? (
+              <>
+                <Text style={styles.txLabel}>Transaction ID: ...{txHash.slice(-4)}</Text>
+                <TouchableOpacity onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${txHash}`)}>
+                  <Text style={styles.txLink}>XRPL explorer: testnet.xrpl.org/</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+          <View style={styles.bottomAction}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={resetPayment}>
+              <Text style={styles.primaryBtnText}>+ New Payment</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
-  content: { flex: 1, padding: 24 },
-  title: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 8 },
-  subtitle: { color: '#8892b0', fontSize: 14, marginBottom: 24 },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { flex: 1, paddingTop: 20 },
 
-  label: { color: '#ccd6f6', fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  amountInput: {
-    backgroundColor: '#141929', borderRadius: 12, padding: 20,
-    color: '#fff', fontSize: 32, fontWeight: '700', fontVariant: ['tabular-nums'],
-    borderWidth: 1, borderColor: '#1e2740', textAlign: 'center',
+  merchantInput: {
+    fontSize: 16, color: colors.text, fontWeight: '500', paddingHorizontal: 24,
+    marginBottom: 40, paddingVertical: 8,
   },
-  usdEquiv: { color: '#00e676', fontSize: 18, textAlign: 'center', marginTop: 8, fontWeight: '700' },
-  xrpEquiv: { color: '#4a5568', fontSize: 13, textAlign: 'center', marginTop: 2 },
 
-  cardArea: {
-    backgroundColor: '#141929', borderRadius: 20, padding: 32,
-    alignItems: 'center', borderWidth: 2, borderColor: '#1e2740',
-    marginTop: 24, marginBottom: 16,
-  },
-  cardDetected: {
-    borderColor: '#00e676', backgroundColor: '#00e67610',
-  },
-  cardIconContainer: {
-    width: 72, height: 72, borderRadius: 36, backgroundColor: '#1e2740',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
-  },
-  cardIcon: { fontSize: 32 },
-  cardIconDetected: { fontSize: 48, color: '#00e676', marginBottom: 8 },
-  cardText: { color: '#ccd6f6', fontSize: 18, fontWeight: '700' },
-  cardTextDetected: { color: '#00e676', fontSize: 18, fontWeight: '700' },
-  cardSubtext: { color: '#4a5568', fontSize: 12, marginTop: 4 },
-  cardCustomer: { color: '#ccd6f6', fontSize: 16, fontWeight: '600', marginTop: 4 },
-  cardAddress: { color: '#8892b0', fontSize: 12, fontFamily: 'monospace', marginTop: 4 },
-  cardTapAgain: { color: '#4a5568', fontSize: 11, marginTop: 8 },
+  amountSection: { alignItems: 'flex-start', paddingHorizontal: 24, marginBottom: 40 },
+  amountLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
+  amountDisplay: { fontSize: 48, fontWeight: '300', color: colors.textLight },
+  amountActive: { color: colors.text },
 
-  manualLabel: { color: '#4a5568', fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },
-  input: {
-    backgroundColor: '#141929', borderRadius: 12, padding: 14,
-    color: '#fff', fontSize: 14, borderWidth: 1, borderColor: '#1e2740',
-  },
-  button: {
-    backgroundColor: '#00e676', borderRadius: 12, padding: 16,
-    alignItems: 'center', marginTop: 20,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#0a0e1a', fontSize: 18, fontWeight: '700' },
-  loadingRow: { flexDirection: 'row', alignItems: 'center' },
-  poweredBy: { color: '#4a5568', fontSize: 11, textAlign: 'center', marginTop: 16 },
+  bottomAction: { position: 'absolute', bottom: 40, left: 24, right: 24 },
+  primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
+  btnDisabled: { opacity: 0.3 },
+  primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
+
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  stateLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 24 },
+  stateDesc: { color: colors.text, fontSize: 18, textAlign: 'center', marginTop: 12, lineHeight: 26 },
+
+  checkmark: { fontSize: 48, color: colors.text, marginBottom: 16 },
+  successAmount: { fontSize: 48, fontWeight: '300', color: colors.text },
+  successPaid: { fontSize: 16, color: colors.textMuted, marginTop: 4 },
+  txInfo: { marginTop: 32, alignItems: 'center' },
+  txLabel: { color: colors.textMuted, fontSize: 13 },
+  txLink: { color: colors.text, fontSize: 13, marginTop: 4, textDecorationLine: 'underline' },
 });

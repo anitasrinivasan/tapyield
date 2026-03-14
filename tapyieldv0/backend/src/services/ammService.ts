@@ -10,7 +10,7 @@ export async function depositToAmm(address: string, seed: string, amountXrp: str
 
   const depositTx: any = {
     TransactionType: 'AMMDeposit',
-    Account: wallet.address,
+    Account: address,  // Customer's address (signer may be regular key)
     Asset: { currency: ammConfig.tokenCurrency, issuer: ammConfig.issuerAddress },
     Asset2: { currency: 'XRP' },
     Amount: xrpToDrops(amountXrp), // XRP to deposit (single-asset)
@@ -48,7 +48,7 @@ export async function withdrawFromAmm(address: string, seed: string, amountXrp: 
 
   const withdrawTx: any = {
     TransactionType: 'AMMWithdraw',
-    Account: wallet.address,
+    Account: address,  // Customer's address (signer may be regular key)
     Asset: { currency: ammConfig.tokenCurrency, issuer: ammConfig.issuerAddress },
     Asset2: { currency: 'XRP' },
     Amount: xrpToDrops(amountXrp.toString()), // XRP to withdraw (single-asset)

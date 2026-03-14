@@ -5,12 +5,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getWalletStatus, releaseGoal, WalletStatusResponse, Goal } from '../services/api';
-
-// Mock exchange rate — in production this comes from an oracle
-const XRP_TO_USD = 2.50;
-const usd = (xrp: number) => `$${(xrp * XRP_TO_USD).toFixed(2)}`;
-const xrpLabel = (xrp: number) => `${xrp.toFixed(2)} XRP`;
+import { getWalletStatus, releaseGoal, WalletStatusResponse, Goal, Transaction } from '../services/api';
+import { colors, XRP_TO_USD, usd } from './theme';
 
 export default function Dashboard() {
   const [wallet, setWallet] = useState<{ address: string; seed: string } | null>(null);
@@ -54,7 +50,7 @@ export default function Dashboard() {
     try {
       await releaseGoal(wallet.address, wallet.seed, goal.id);
       await fetchStatus();
-      Alert.alert('Goal Released!', `${usd(goal.targetAmount)} unlocked and available to spend`);
+      Alert.alert('Goal Released!', `${usd(goal.targetAmount)} unlocked`);
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
     } finally {
@@ -62,8 +58,12 @@ export default function Dashboard() {
     }
   };
 
-  const isGoalReady = (goal: Goal) => {
-    return goal.status === 'locked' && new Date() >= new Date(goal.finishAfter);
+  const isGoalReady = (goal: Goal) =>
+    goal.status === 'locked' && new Date() >= new Date(goal.finishAfter);
+
+  const daysLeft = (goal: Goal) => {
+    const diff = new Date(goal.finishAfter).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
 
   if (!status) {
@@ -77,164 +77,131 @@ export default function Dashboard() {
   }
 
   const spendingBalance = parseFloat(status.spendingBalance);
-  const totalYield = parseFloat(status.totalYieldEarned);
-  const lockedAmt = parseFloat(status.lockedAmount);
-  const totalBalance = spendingBalance + lockedAmt;
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00e676" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
       >
-        {/* Balance Card */}
-        <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Spending Balance</Text>
-          <Text style={styles.balanceAmount}>{usd(spendingBalance)}</Text>
-          <Text style={styles.balanceXrp}>{xrpLabel(spendingBalance)}</Text>
-
-          <View style={styles.balanceRow}>
-            <View style={styles.balanceSub}>
-              <Text style={styles.subLabel}>Locked in Goals</Text>
-              <Text style={styles.subValue}>{usd(lockedAmt)}</Text>
-              <Text style={styles.subXrp}>{xrpLabel(lockedAmt)}</Text>
-            </View>
-            <View style={styles.balanceSub}>
-              <Text style={styles.subLabel}>Yield Earned</Text>
-              <Text style={[styles.subValue, styles.yieldText]}>
-                +{usd(totalYield)}
-              </Text>
-              <Text style={styles.yieldXrp}>+{totalYield.toFixed(6)} XRP</Text>
-            </View>
-          </View>
-
-          {parseFloat(status.yieldPercentage) > 0 && (
-            <View style={styles.yieldBadge}>
-              <Text style={styles.yieldBadgeText}>
-                +{status.yieldPercentage}% yield — earning while you save
-              </Text>
-            </View>
-          )}
-
-          <Text style={styles.totalLabel}>
-            Total Balance: {usd(totalBalance)}
-          </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Tap Yield</Text>
+          <View style={styles.headerIcon} />
         </View>
+
+        {/* Card */}
+        <TouchableOpacity
+          style={styles.card}
+          onLongPress={() => setShowTechView(!showTechView)}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.cardLabel}>YOUR CARD</Text>
+          <Text style={styles.cardBalance}>{usd(spendingBalance)}</Text>
+        </TouchableOpacity>
 
         {/* Action Buttons */}
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => router.push('/deposit')}
-          >
-            <Text style={styles.actionIcon}>+</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/deposit')}>
             <Text style={styles.actionLabel}>Deposit</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => router.push('/goal/create')}
-          >
-            <Text style={styles.actionIcon}>🎯</Text>
-            <Text style={styles.actionLabel}>New Goal</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/pay')}>
+            <Text style={styles.actionLabel}>Receive</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => router.push('/pay')}
-          >
-            <Text style={styles.actionIcon}>💳</Text>
-            <Text style={styles.actionLabel}>Charge</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/register-card')}>
+            <Text style={styles.actionLabel}>Card</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Goals */}
-        {status.goals.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Savings Goals</Text>
-            {status.goals.map((goal) => (
-              <View key={goal.id} style={styles.goalCard}>
-                <View style={styles.goalHeader}>
-                  <Text style={styles.goalName}>{goal.name}</Text>
-                  <Text style={[
-                    styles.goalStatus,
-                    goal.status === 'released' ? styles.releasedStatus :
-                    isGoalReady(goal) ? styles.readyStatus : styles.lockedStatus,
-                  ]}>
-                    {goal.status === 'released' ? 'Released' :
-                     isGoalReady(goal) ? 'Ready' : 'Locked'}
+        {/* Locked Funds */}
+        <Text style={styles.sectionLabel}>YOUR LOCKED FUNDS</Text>
+        {status.goals.filter(g => g.status === 'locked').map((goal) => (
+          <TouchableOpacity
+            key={goal.id}
+            style={styles.goalRow}
+            onPress={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })}
+          >
+            <View>
+              <Text style={styles.goalName}>{goal.name}</Text>
+              <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
+            </View>
+            <View style={styles.goalRight}>
+              {isGoalReady(goal) ? (
+                <TouchableOpacity
+                  style={styles.releaseBtn}
+                  onPress={() => handleRelease(goal)}
+                  disabled={releasing === goal.id}
+                >
+                  <Text style={styles.releaseBtnText}>
+                    {releasing === goal.id ? 'Releasing...' : 'Release'}
                   </Text>
-                </View>
-                <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
-                <Text style={styles.goalXrp}>{xrpLabel(goal.targetAmount)}</Text>
-                <Text style={styles.goalDate}>
-                  {goal.status === 'released' ? 'Released' :
-                   isGoalReady(goal) ? 'Ready to release!' :
-                   `Unlocks: ${new Date(goal.finishAfter).toLocaleString()}`}
-                </Text>
-                {isGoalReady(goal) && goal.status === 'locked' && (
-                  <TouchableOpacity
-                    style={styles.releaseBtn}
-                    onPress={() => handleRelease(goal)}
-                    disabled={releasing === goal.id}
-                  >
-                    <Text style={styles.releaseBtnText}>
-                      {releasing === goal.id ? 'Releasing...' : 'Release Funds'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.goalDays}>{daysLeft(goal)} days left</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
 
-        {/* Under the Hood — Technical View */}
         <TouchableOpacity
-          style={styles.techToggle}
-          onPress={() => setShowTechView(!showTechView)}
+          style={styles.createGoalBtn}
+          onPress={() => router.push('/goal/create')}
         >
-          <Text style={styles.techToggleText}>
-            {showTechView ? 'Hide' : 'Show'} Under the Hood
-          </Text>
-          <Text style={styles.techToggleArrow}>{showTechView ? '▲' : '▼'}</Text>
+          <Text style={styles.createGoalText}>+ Create goal</Text>
         </TouchableOpacity>
 
-        {showTechView && (
-          <View style={styles.techCard}>
-            <Text style={styles.techTitle}>Blockchain Details</Text>
-
-            <View style={styles.techRow}>
-              <Text style={styles.techLabel}>Wallet Address</Text>
-              <Text style={styles.techValue}>{wallet?.address}</Text>
-            </View>
-
-            <View style={styles.techRow}>
-              <Text style={styles.techLabel}>XRP Balance (on-chain)</Text>
-              <Text style={styles.techValue}>{status.xrpBalance} XRP</Text>
-            </View>
-
-            <View style={styles.techRow}>
-              <Text style={styles.techLabel}>LP Token Balance</Text>
-              <Text style={styles.techValue}>
-                {status.ammPosition.lpTokenBalance.toFixed(4)} LP
-              </Text>
-            </View>
-
-            <View style={styles.techRow}>
-              <Text style={styles.techLabel}>AMM Position Value</Text>
-              <Text style={styles.techValue}>{status.ammPosition.xrpValue} XRP</Text>
-            </View>
-
-            <View style={styles.techRow}>
-              <Text style={styles.techLabel}>Network</Text>
-              <Text style={styles.techValue}>XRPL Testnet</Text>
-            </View>
-
-            {status.goals.filter(g => g.status === 'locked').map(goal => (
-              <View key={goal.id} style={styles.techRow}>
-                <Text style={styles.techLabel}>Escrow: {goal.name}</Text>
-                <Text style={styles.techValue}>Seq #{(goal as any).escrowSequence || 'N/A'}</Text>
+        {/* Recent Activity */}
+        {(status.transactions?.length > 0 || status.goals.length > 0) && (
+          <>
+            <TouchableOpacity onPress={() => router.push('/activity')}>
+              <Text style={styles.sectionLabel}>RECENT ACTIVITY  ›</Text>
+            </TouchableOpacity>
+            {status.transactions?.slice(0, 5).map((tx, i) => (
+              <View key={tx.txHash || i} style={styles.activityRow}>
+                <Text style={styles.activityDate}>
+                  {new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}
+                  {tx.merchantName ? ` · ${tx.merchantName.toUpperCase()}` : ''}
+                </Text>
+                <Text style={styles.activityAmount}>
+                  {tx.type === 'payment' ? '-' : '+'}{usd(tx.amount)}
+                </Text>
               </View>
             ))}
+            {(!status.transactions || status.transactions.length === 0) && status.goals.slice(0, 5).map((goal) => (
+              <View key={goal.id} style={styles.activityRow}>
+                <Text style={styles.activityDate}>
+                  {new Date(goal.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}
+                </Text>
+                <Text style={styles.activityAmount}>{usd(goal.targetAmount)}</Text>
+              </View>
+            ))}
+          </>
+        )}
 
+        {/* Under the Hood (long press card to toggle) */}
+        {showTechView && (
+          <View style={styles.techCard}>
+            <Text style={styles.techTitle}>UNDER THE HOOD</Text>
+            <View style={styles.techRow}>
+              <Text style={styles.techLabel}>Wallet</Text>
+              <Text style={styles.techValue}>{wallet?.address}</Text>
+            </View>
+            <View style={styles.techRow}>
+              <Text style={styles.techLabel}>XRP Balance</Text>
+              <Text style={styles.techValue}>{status.xrpBalance} XRP</Text>
+            </View>
+            <View style={styles.techRow}>
+              <Text style={styles.techLabel}>LP Tokens</Text>
+              <Text style={styles.techValue}>{status.ammPosition.lpTokenBalance.toFixed(4)}</Text>
+            </View>
+            <View style={styles.techRow}>
+              <Text style={styles.techLabel}>AMM Position</Text>
+              <Text style={styles.techValue}>{status.ammPosition.xrpValue} XRP</Text>
+            </View>
+            <View style={styles.techRow}>
+              <Text style={styles.techLabel}>Yield</Text>
+              <Text style={styles.techValue}>+{status.totalYieldEarned} XRP ({status.yieldPercentage}%)</Text>
+            </View>
             <TouchableOpacity
               style={styles.explorerBtn}
               onPress={() => Linking.openURL(`https://testnet.xrpl.org/accounts/${wallet?.address}`)}
@@ -251,77 +218,64 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
-  scroll: { flex: 1, padding: 16 },
+  container: { flex: 1, backgroundColor: colors.background },
+  scroll: { flex: 1, padding: 20 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: '#8892b0', fontSize: 16 },
+  loadingText: { color: colors.textMuted, fontSize: 16 },
 
-  balanceCard: {
-    backgroundColor: '#141929', borderRadius: 16, padding: 24, marginBottom: 20,
-    borderWidth: 1, borderColor: '#1e2740',
-  },
-  balanceLabel: { color: '#8892b0', fontSize: 14, marginBottom: 4 },
-  balanceAmount: { color: '#fff', fontSize: 40, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  balanceXrp: { color: '#4a5568', fontSize: 14, fontVariant: ['tabular-nums'], marginTop: 2 },
-  balanceRow: { flexDirection: 'row', marginTop: 20, gap: 24 },
-  balanceSub: { flex: 1 },
-  subLabel: { color: '#8892b0', fontSize: 12, marginBottom: 2 },
-  subValue: { color: '#ccd6f6', fontSize: 18, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  subXrp: { color: '#4a5568', fontSize: 11, fontVariant: ['tabular-nums'] },
-  yieldText: { color: '#00e676' },
-  yieldXrp: { color: '#00e67680', fontSize: 11, fontVariant: ['tabular-nums'] },
-  yieldBadge: {
-    backgroundColor: '#00e67615', borderRadius: 8, padding: 8, marginTop: 16,
-    borderWidth: 1, borderColor: '#00e67630',
-  },
-  yieldBadgeText: { color: '#00e676', fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  totalLabel: { color: '#8892b0', fontSize: 13, marginTop: 12, textAlign: 'right' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  headerTitle: { fontSize: 28, fontWeight: '700', color: colors.text },
+  headerIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accent },
 
-  actions: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  card: {
+    backgroundColor: colors.cardDark, borderRadius: 16, padding: 24,
+    marginBottom: 20, minHeight: 120, justifyContent: 'flex-end',
+  },
+  cardLabel: { color: '#AAAAAA', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
+  cardBalance: { color: colors.white, fontSize: 32, fontWeight: '700' },
+
+  actions: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   actionBtn: {
-    flex: 1, backgroundColor: '#141929', borderRadius: 12, padding: 16,
-    alignItems: 'center', borderWidth: 1, borderColor: '#1e2740',
+    flex: 1, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.border,
   },
-  actionIcon: { fontSize: 24, marginBottom: 4 },
-  actionLabel: { color: '#ccd6f6', fontSize: 13, fontWeight: '600' },
+  actionLabel: { color: colors.text, fontSize: 13, fontWeight: '600' },
 
-  section: { marginBottom: 24 },
-  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  sectionLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12, marginTop: 8 },
 
-  goalCard: {
-    backgroundColor: '#141929', borderRadius: 12, padding: 16, marginBottom: 10,
-    borderWidth: 1, borderColor: '#1e2740',
+  goalRow: {
+    backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border,
   },
-  goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  goalName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  goalStatus: { fontSize: 12, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
-  lockedStatus: { backgroundColor: '#1e2740', color: '#8892b0' },
-  readyStatus: { backgroundColor: '#00e67620', color: '#00e676' },
-  releasedStatus: { backgroundColor: '#4a556820', color: '#4a5568' },
-  goalAmount: { color: '#ccd6f6', fontSize: 22, fontWeight: '700', marginTop: 8, fontVariant: ['tabular-nums'] },
-  goalXrp: { color: '#4a5568', fontSize: 12, fontVariant: ['tabular-nums'] },
-  goalDate: { color: '#8892b0', fontSize: 12, marginTop: 4 },
-  releaseBtn: {
-    backgroundColor: '#00e676', borderRadius: 8, padding: 10, marginTop: 12, alignItems: 'center',
-  },
-  releaseBtnText: { color: '#0a0e1a', fontWeight: '700', fontSize: 14 },
+  goalName: { color: colors.textMuted, fontSize: 13, marginBottom: 4 },
+  goalAmount: { color: colors.text, fontSize: 22, fontWeight: '700' },
+  goalRight: { alignItems: 'flex-end' },
+  goalDays: { color: colors.textMuted, fontSize: 13 },
+  releaseBtn: { backgroundColor: colors.accent, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  releaseBtnText: { color: colors.white, fontSize: 13, fontWeight: '600' },
 
-  techToggle: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    paddingVertical: 12, gap: 8,
+  createGoalBtn: {
+    borderRadius: 12, paddingVertical: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, marginBottom: 28,
   },
-  techToggleText: { color: '#4a5568', fontSize: 13, fontWeight: '600' },
-  techToggleArrow: { color: '#4a5568', fontSize: 12 },
+  createGoalText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
+
+  activityRow: {
+    backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  activityDate: { color: colors.textMuted, fontSize: 10, letterSpacing: 0.5, marginBottom: 4 },
+  activityAmount: { color: colors.text, fontSize: 20, fontWeight: '600' },
+
   techCard: {
-    backgroundColor: '#0d1117', borderRadius: 12, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: '#1e274060',
+    backgroundColor: colors.card, borderRadius: 12, padding: 16, marginTop: 16,
+    borderWidth: 1, borderColor: colors.border,
   },
-  techTitle: { color: '#8892b0', fontSize: 14, fontWeight: '700', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  techRow: { marginBottom: 10 },
-  techLabel: { color: '#4a5568', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
-  techValue: { color: '#8892b0', fontSize: 13, fontFamily: 'monospace', marginTop: 2 },
-  explorerBtn: {
-    backgroundColor: '#1e2740', borderRadius: 8, padding: 10, marginTop: 8, alignItems: 'center',
-  },
-  explorerBtnText: { color: '#ccd6f6', fontSize: 13, fontWeight: '600' },
+  techTitle: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 12 },
+  techRow: { marginBottom: 8 },
+  techLabel: { color: colors.textMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  techValue: { color: colors.text, fontSize: 13, fontFamily: 'monospace', marginTop: 2 },
+  explorerBtn: { backgroundColor: colors.accent, borderRadius: 8, padding: 10, marginTop: 8, alignItems: 'center' },
+  explorerBtnText: { color: colors.white, fontSize: 13, fontWeight: '600' },
 });

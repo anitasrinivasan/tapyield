@@ -1,147 +1,197 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
-  StyleSheet, SafeAreaView, Alert, Linking,
+  StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createGoal } from '../../services/api';
+import { colors, XRP_TO_USD } from '../theme';
+import NumberPad from '../../components/NumberPad';
 
-const XRP_TO_USD = 2.50;
+type GoalState = 'input' | 'loading' | 'success';
 
 export default function CreateGoal() {
+  const [state, setState] = useState<GoalState>('input');
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [minutes, setMinutes] = useState('3');
-  const [loading, setLoading] = useState(false);
+  const [days, setDays] = useState('');
+  const [resultAmount, setResultAmount] = useState('');
+  const [resultName, setResultName] = useState('');
+  const [resultDays, setResultDays] = useState(0);
 
-  const usdEquiv = amount ? `$${(parseFloat(amount) * XRP_TO_USD).toFixed(2)}` : '';
+  const displayAmount = amount ? `$${amount}` : '$0.00';
+  const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
+
+  const handleNumberPad = (key: string) => {
+    if (key === '⌫') {
+      setAmount((prev) => prev.slice(0, -1));
+    } else if (key === '.') {
+      if (!amount.includes('.')) setAmount((prev) => prev + '.');
+    } else {
+      const parts = amount.split('.');
+      if (parts[1] && parts[1].length >= 2) return;
+      setAmount((prev) => prev + key);
+    }
+  };
 
   const handleCreate = async () => {
-    if (!name || !amount || !minutes) {
-      Alert.alert('Error', 'Fill in all fields');
-      return;
-    }
+    if (!name.trim()) { Alert.alert('Enter a goal name'); return; }
+    if (!amount || parseFloat(amount) <= 0) { Alert.alert('Enter an amount'); return; }
+    if (!days || parseInt(days) <= 0) { Alert.alert('Enter days to lock'); return; }
 
-    setLoading(true);
+    setState('loading');
     try {
       const stored = await AsyncStorage.getItem('wallet');
       if (!stored) throw new Error('No wallet found');
       const wallet = JSON.parse(stored);
 
-      // Calculate unlock date from minutes
-      const unlockDate = new Date(Date.now() + parseInt(minutes) * 60 * 1000).toISOString();
+      // Convert days to minutes for demo (1 day = 1 minute for hackathon)
+      const durationMinutes = parseInt(days);
+      const unlockDate = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
 
-      const result = await createGoal(wallet.address, wallet.seed, name, amount, unlockDate);
-      const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
-      Alert.alert(
-        'Goal Created!',
-        `$${usdAmt} locked until ${new Date(unlockDate).toLocaleTimeString()}\n\nYour funds will keep earning yield while locked.\nEscrow commitment recorded on-chain.`,
-        [
-          { text: 'View Escrow', onPress: () => Linking.openURL(`https://testnet.xrpl.org/transactions/${result.escrowTxHash}`) },
-          { text: 'Done', onPress: () => router.back() },
-        ]
-      );
+      await createGoal(wallet.address, wallet.seed, name, xrpAmount, unlockDate);
+      setResultAmount(displayAmount);
+      setResultName(name.toUpperCase());
+      setResultDays(parseInt(days));
+      setState('success');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
+      setState('input');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Create Savings Goal</Text>
-        <Text style={styles.subtitle}>
-          Commit to saving — your funds keep earning yield while locked
-        </Text>
+      {state === 'input' && (
+        <View style={styles.content}>
+          <View style={styles.nameRow}>
+            <Text style={styles.nameIcon}>🎯</Text>
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Goal Name"
+              placeholderTextColor={colors.textLight}
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
 
-        <Text style={styles.label}>Goal Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g., Emergency Fund"
-          placeholderTextColor="#4a5568"
-          value={name}
-          onChangeText={setName}
-        />
+          <View style={styles.amountSection}>
+            <Text style={styles.label}>GOAL AMOUNT</Text>
+            <Text style={[styles.amountDisplay, amount ? styles.amountActive : null]}>
+              {displayAmount}
+            </Text>
+          </View>
 
-        <Text style={styles.label}>Amount (XRP)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g., 20"
-          placeholderTextColor="#4a5568"
-          keyboardType="decimal-pad"
-          value={amount}
-          onChangeText={setAmount}
-        />
-        {usdEquiv ? <Text style={styles.usdEquiv}>≈ {usdEquiv} USD</Text> : null}
+          <NumberPad onPress={handleNumberPad} />
 
-        <Text style={styles.label}>Lock Duration (minutes)</Text>
-        <View style={styles.presets}>
-          {['2', '3', '5', '10'].map(val => (
+          <View style={styles.daysRow}>
+            <Text style={styles.daysText}>Goal unlocks in</Text>
+            <TextInput
+              style={styles.daysInput}
+              placeholder="0"
+              placeholderTextColor={colors.textLight}
+              keyboardType="number-pad"
+              value={days}
+              onChangeText={setDays}
+              maxLength={3}
+            />
+            <Text style={styles.daysText}>days</Text>
+          </View>
+
+          <View style={styles.bottomAction}>
             <TouchableOpacity
-              key={val}
-              style={[styles.presetBtn, minutes === val && styles.presetActive]}
-              onPress={() => setMinutes(val)}
+              style={[styles.primaryBtn, (!name || !amount || !days) && styles.btnDisabled]}
+              onPress={handleCreate}
+              disabled={!name || !amount || !days}
             >
-              <Text style={[styles.presetText, minutes === val && styles.presetTextActive]}>
-                {val}m
-              </Text>
+              <Text style={styles.primaryBtnText}>Create Goal</Text>
             </TouchableOpacity>
-          ))}
+          </View>
         </View>
+      )}
 
-        <View style={styles.warning}>
-          <Text style={styles.warningText}>
-            You won't be able to spend these funds for {minutes} minutes.
-            They will continue earning yield while locked.
-          </Text>
+      {state === 'loading' && (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.textMuted} />
+          <Text style={styles.stateLabel}>LOADING</Text>
+          <Text style={styles.stateDesc}>Creating goal...</Text>
         </View>
+      )}
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleCreate}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#0a0e1a" />
-          ) : (
-            <Text style={styles.buttonText}>Lock Funds</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      {state === 'success' && (
+        <View style={styles.centered}>
+          <Text style={styles.lockIcon}>🔒</Text>
+          <Text style={styles.successAmount}>{resultAmount}</Text>
+          <Text style={styles.successName}>🎯  {resultName}</Text>
+
+          <View style={styles.successDetails}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailValue}>$0.0000000</Text>
+              <Text style={styles.detailLabel}>YIELD</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailValue}>{resultDays} d</Text>
+              <Text style={styles.detailLabel}>UNTIL UNLOCK</Text>
+            </View>
+          </View>
+
+          <View style={styles.progressBar}>
+            <View style={styles.progressFill} />
+          </View>
+
+          <View style={styles.bottomAction}>
+            <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+              <Text style={styles.doneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
-  content: { flex: 1, padding: 24 },
-  title: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 8 },
-  subtitle: { color: '#8892b0', fontSize: 14, marginBottom: 24 },
-  label: { color: '#ccd6f6', fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16 },
-  input: {
-    backgroundColor: '#141929', borderRadius: 12, padding: 16,
-    color: '#fff', fontSize: 18, borderWidth: 1, borderColor: '#1e2740',
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { flex: 1, paddingTop: 12 },
+
+  nameRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 24, gap: 8 },
+  nameIcon: { fontSize: 20 },
+  nameInput: { flex: 1, fontSize: 18, color: colors.text, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 8 },
+
+  amountSection: { paddingHorizontal: 24, marginBottom: 24 },
+  label: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
+  amountDisplay: { fontSize: 48, fontWeight: '300', color: colors.textLight },
+  amountActive: { color: colors.text },
+
+  daysRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, gap: 8, marginTop: 16 },
+  daysText: { color: colors.textMuted, fontSize: 14 },
+  daysInput: {
+    fontSize: 16, fontWeight: '600', color: colors.text, borderBottomWidth: 1,
+    borderBottomColor: colors.border, paddingBottom: 4, width: 40, textAlign: 'center',
   },
-  presets: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  presetBtn: {
-    flex: 1, backgroundColor: '#1e2740', borderRadius: 8, padding: 12, alignItems: 'center',
-  },
-  presetActive: { backgroundColor: '#00e67630', borderWidth: 1, borderColor: '#00e676' },
-  presetText: { color: '#ccd6f6', fontWeight: '600' },
-  presetTextActive: { color: '#00e676' },
-  warning: {
-    backgroundColor: '#1e274060', borderRadius: 8, padding: 12, marginTop: 24,
-    borderLeftWidth: 3, borderLeftColor: '#ffd740',
-  },
-  warningText: { color: '#8892b0', fontSize: 13, lineHeight: 18 },
-  button: {
-    backgroundColor: '#00e676', borderRadius: 12, padding: 16,
-    alignItems: 'center', marginTop: 24,
-  },
-  buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: '#0a0e1a', fontSize: 18, fontWeight: '700' },
-  usdEquiv: { color: '#00e676', fontSize: 14, marginTop: 4, fontWeight: '600' },
+
+  bottomAction: { position: 'absolute', bottom: 40, left: 24, right: 24 },
+  primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
+  btnDisabled: { opacity: 0.3 },
+  primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
+
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  stateLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 24 },
+  stateDesc: { color: colors.text, fontSize: 18, marginTop: 12 },
+
+  lockIcon: { fontSize: 48, marginBottom: 16 },
+  successAmount: { fontSize: 56, fontWeight: '700', color: colors.text },
+  successName: { fontSize: 14, color: colors.textMuted, letterSpacing: 1, marginTop: 8 },
+
+  successDetails: { flexDirection: 'row', gap: 40, marginTop: 32 },
+  detailRow: { alignItems: 'center' },
+  detailValue: { fontSize: 16, fontWeight: '600', color: colors.text },
+  detailLabel: { fontSize: 10, color: colors.textMuted, letterSpacing: 0.5, marginTop: 4 },
+
+  progressBar: { width: '80%', height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 24 },
+  progressFill: { width: '2%', height: 4, backgroundColor: colors.accent, borderRadius: 2 },
+
+  doneBtn: { backgroundColor: colors.card, borderRadius: 24, paddingVertical: 16, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  doneBtnText: { color: colors.text, fontSize: 16, fontWeight: '600' },
 });

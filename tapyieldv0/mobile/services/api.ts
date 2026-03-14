@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Change this to your ngrok URL or local IP when testing on device
-const API_BASE = 'http://localhost:3000';
+// Railway deployment — accessible from any device
+const API_BASE = 'https://tapyield-backend-production.up.railway.app';
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -23,6 +23,14 @@ export interface Goal {
   createdAt: string;
 }
 
+export interface Transaction {
+  type: 'deposit' | 'withdraw' | 'payment' | 'escrow_create' | 'escrow_finish';
+  amount: number;
+  txHash: string;
+  timestamp: string;
+  merchantName?: string;
+}
+
 export interface WalletStatusResponse {
   address: string;
   xrpBalance: string;
@@ -31,6 +39,7 @@ export interface WalletStatusResponse {
     xrpValue: string;
   };
   goals: Goal[];
+  transactions: Transaction[];
   spendingBalance: string;
   lockedAmount: string;
   totalYieldEarned: string;
@@ -71,14 +80,44 @@ export async function releaseGoal(address: string, seed: string, goalId: string)
 }
 
 export async function tapPayment(
-  address: string,
-  seed: string,
+  cardUid: string,
   merchantAddress: string,
-  amountXrp: string
+  amountXrp: string,
+  merchantName?: string
 ) {
   const { data } = await api.post('/payment/tap', {
-    address, seed, merchantAddress, amountXrp,
+    cardUid, merchantAddress, amountXrp, merchantName,
   });
+  return data;
+}
+
+export async function setupRegularKey(address: string) {
+  const { data } = await api.post('/wallet/setup-regular-key', { address });
+  return data;
+}
+
+export async function registerCard(uid: string, address: string, name: string) {
+  const { data } = await api.post('/card/register', { uid, address, name });
+  return data;
+}
+
+export async function getCardName(uid: string): Promise<string> {
+  const { data } = await api.get(`/card/${uid}/name`);
+  return data.name;
+}
+
+export async function xamanSignIn() {
+  const { data } = await api.post('/xaman/signin');
+  return data;
+}
+
+export async function xamanSetRegularKey(account: string, regularKeyAddress: string) {
+  const { data } = await api.post('/xaman/set-regular-key', { account, regularKeyAddress });
+  return data;
+}
+
+export async function xamanGetPayloadStatus(uuid: string) {
+  const { data } = await api.get(`/xaman/payload/${uuid}`);
   return data;
 }
 

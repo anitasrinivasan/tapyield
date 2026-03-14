@@ -1,23 +1,36 @@
 import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ActivityIndicator,
+  View, Text, TouchableOpacity, ActivityIndicator,
   StyleSheet, SafeAreaView, Alert, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { depositToPool } from '../services/api';
-
-const XRP_TO_USD = 2.50;
+import { colors, XRP_TO_USD } from './theme';
+import NumberPad from '../components/NumberPad';
 
 export default function Deposit() {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const usdEquiv = amount ? `$${(parseFloat(amount) * XRP_TO_USD).toFixed(2)}` : '';
+  const displayAmount = amount ? `$${amount}` : '$0.00';
+  const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
+
+  const handleNumberPad = (key: string) => {
+    if (key === '⌫') {
+      setAmount((prev) => prev.slice(0, -1));
+    } else if (key === '.') {
+      if (!amount.includes('.')) setAmount((prev) => prev + '.');
+    } else {
+      const parts = amount.split('.');
+      if (parts[1] && parts[1].length >= 2) return;
+      setAmount((prev) => prev + key);
+    }
+  };
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Enter a valid amount');
+      Alert.alert('Enter an amount');
       return;
     }
 
@@ -27,11 +40,10 @@ export default function Deposit() {
       if (!stored) throw new Error('No wallet found');
       const wallet = JSON.parse(stored);
 
-      const result = await depositToPool(wallet.address, wallet.seed, amount);
-      const usdAmt = (parseFloat(amount) * XRP_TO_USD).toFixed(2);
+      const result = await depositToPool(wallet.address, wallet.seed, xrpAmount);
       Alert.alert(
         'Deposit Successful!',
-        `$${usdAmt} deposited into your yield pool.\nYour funds are now earning yield.`,
+        `${displayAmount} deposited. Your funds are now earning yield.`,
         [
           { text: 'View on Explorer', onPress: () => Linking.openURL(`https://testnet.xrpl.org/transactions/${result.txHash}`) },
           { text: 'Done', onPress: () => router.back() },
@@ -44,87 +56,55 @@ export default function Deposit() {
     }
   };
 
-  // Preset amounts in USD → XRP
-  const presets = [
-    { usd: '$25', xrp: '10' },
-    { usd: '$62', xrp: '25' },
-    { usd: '$125', xrp: '50' },
-  ];
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Add Funds</Text>
-        <Text style={styles.subtitle}>
-          Your funds start earning yield immediately
-        </Text>
+        <Text style={styles.subtitle}>Your funds start earning yield immediately</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Amount in XRP"
-          placeholderTextColor="#4a5568"
-          keyboardType="decimal-pad"
-          value={amount}
-          onChangeText={setAmount}
-        />
-        {usdEquiv ? (
-          <Text style={styles.usdEquiv}>≈ {usdEquiv} USD</Text>
-        ) : null}
-
-        <View style={styles.presets}>
-          {presets.map(p => (
-            <TouchableOpacity
-              key={p.xrp}
-              style={[styles.presetBtn, amount === p.xrp && styles.presetActive]}
-              onPress={() => setAmount(p.xrp)}
-            >
-              <Text style={[styles.presetUsd, amount === p.xrp && styles.presetTextActive]}>{p.usd}</Text>
-              <Text style={styles.presetXrp}>{p.xrp} XRP</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.amountSection}>
+          <Text style={styles.label}>DEPOSIT AMOUNT</Text>
+          <Text style={[styles.amountDisplay, amount ? styles.amountActive : null]}>
+            {displayAmount}
+          </Text>
+          {amount ? <Text style={styles.xrpEquiv}>{xrpAmount} XRP</Text> : null}
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleDeposit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#0a0e1a" />
-          ) : (
-            <Text style={styles.buttonText}>
-              Deposit {usdEquiv || ''}
-            </Text>
-          )}
-        </TouchableOpacity>
+        <NumberPad onPress={handleNumberPad} />
+
+        <View style={styles.bottomAction}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0 || loading) && styles.btnDisabled]}
+            onPress={handleDeposit}
+            disabled={!amount || parseFloat(amount) <= 0 || loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Deposit {displayAmount}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
-  content: { flex: 1, padding: 24 },
-  title: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 8 },
-  subtitle: { color: '#8892b0', fontSize: 14, marginBottom: 32 },
-  input: {
-    backgroundColor: '#141929', borderRadius: 12, padding: 16,
-    color: '#fff', fontSize: 24, fontWeight: '600', fontVariant: ['tabular-nums'],
-    borderWidth: 1, borderColor: '#1e2740', textAlign: 'center',
-  },
-  usdEquiv: { color: '#00e676', fontSize: 16, textAlign: 'center', marginTop: 8, fontWeight: '600' },
-  presets: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  presetBtn: {
-    flex: 1, backgroundColor: '#1e2740', borderRadius: 8, padding: 12, alignItems: 'center',
-  },
-  presetActive: { backgroundColor: '#00e67620', borderWidth: 1, borderColor: '#00e676' },
-  presetUsd: { color: '#ccd6f6', fontWeight: '700', fontSize: 16 },
-  presetXrp: { color: '#4a5568', fontSize: 11, marginTop: 2 },
-  presetTextActive: { color: '#00e676' },
-  button: {
-    backgroundColor: '#00e676', borderRadius: 12, padding: 16,
-    alignItems: 'center', marginTop: 32,
-  },
-  buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: '#0a0e1a', fontSize: 18, fontWeight: '700' },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { flex: 1, paddingTop: 12 },
+
+  title: { fontSize: 28, fontWeight: '700', color: colors.text, paddingHorizontal: 24, marginBottom: 8 },
+  subtitle: { color: colors.textMuted, fontSize: 14, paddingHorizontal: 24, marginBottom: 32 },
+
+  amountSection: { paddingHorizontal: 24, marginBottom: 32 },
+  label: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
+  amountDisplay: { fontSize: 48, fontWeight: '300', color: colors.textLight },
+  amountActive: { color: colors.text },
+  xrpEquiv: { color: colors.textMuted, fontSize: 14, marginTop: 4 },
+
+  bottomAction: { position: 'absolute', bottom: 40, left: 24, right: 24 },
+  primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
+  btnDisabled: { opacity: 0.3 },
+  primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
 });

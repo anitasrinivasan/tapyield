@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "setup-amm": "ts-node src/scripts/setup-amm.ts",
     "generate-trades": "ts-node src/scripts/generate-trades.ts"
   },
   "dependencies": {
+    "axios": "^1.13.6",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
     "express": "^4.21.0",
