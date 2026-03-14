@@ -12,13 +12,12 @@ const router = Router();
 //   3. User tapped their NFC card (UID was read)
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { uid, address, name, ctr } = req.body;
+    const { uid, address, name } = req.body;
     if (!uid || !address) {
       res.status(400).json({ error: 'uid and address required' });
       return;
     }
-    // ctr is the NFC counter value read at registration time — becomes the baseline
-    const result = registerCard(uid, address, name, Number(ctr) || 0);
+    const result = registerCard(uid, address, name);
     res.json(result);
   } catch (err: any) {
     console.error('Card register error:', err);

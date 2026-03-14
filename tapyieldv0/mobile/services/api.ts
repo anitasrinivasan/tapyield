@@ -8,10 +8,6 @@ const api = axios.create({
   timeout: 30000, // XRPL calls can be slow
 });
 
-export function getApiBase(): string {
-  return (api.defaults.baseURL as string) || API_BASE;
-}
-
 export interface WalletCreateResponse {
   address: string;
   seed: string;
@@ -27,6 +23,14 @@ export interface Goal {
   createdAt: string;
 }
 
+export interface Transaction {
+  type: 'deposit' | 'withdraw' | 'payment' | 'escrow_create' | 'escrow_finish';
+  amount: number;
+  txHash: string;
+  timestamp: string;
+  merchantName?: string;
+}
+
 export interface WalletStatusResponse {
   address: string;
   xrpBalance: string;
@@ -35,6 +39,7 @@ export interface WalletStatusResponse {
     xrpValue: string;
   };
   goals: Goal[];
+  transactions: Transaction[];
   spendingBalance: string;
   lockedAmount: string;
   totalYieldEarned: string;
@@ -74,62 +79,15 @@ export async function releaseGoal(address: string, seed: string, goalId: string)
   return data;
 }
 
-// --- Card registration ---
-
-// Step 1: generate regular key pair on backend, returns regularKeyAddress for Xaman payload
-export async function setupRegularKey(address: string): Promise<{ regularKeyAddress: string }> {
-  const { data } = await api.post('/wallet/setup-regular-key', { address });
-  return data;
-}
-
-// Step 1b (demo fallback): submit SetRegularKey on-chain directly using master seed
-// Use this when Xaman is not available (e.g. pre-demo setup via curl wallets)
-export async function submitRegularKey(address: string, seed: string): Promise<{ txHash: string }> {
-  const { data } = await api.post('/wallet/submit-regular-key', { address, seed });
-  return data;
-}
-
-// Step 2: map NFC hardware UID to the customer's wallet (after SetRegularKey confirmed)
-export async function registerNfcCard(
-  uid: string,
-  address: string,
-  name: string,
-  ctr: number,
-): Promise<{ registered: boolean; uid: string }> {
-  const { data } = await api.post('/card/register', { uid, address, name, ctr });
-  return data;
-}
-
-// --- Payment ---
-
 export async function tapPayment(
   cardUid: string,
-  ctr: number,
   merchantAddress: string,
   amountXrp: string,
+  merchantName?: string
 ) {
   const { data } = await api.post('/payment/tap', {
-    cardUid, ctr, merchantAddress, amountXrp,
+    cardUid, merchantAddress, amountXrp, merchantName,
   });
-  return data as { txHash: string; customerName: string; remainingSpendingBalance: string };
-}
-
-// --- Xaman (proxied through backend to keep API key server-side) ---
-
-export async function createXamanPayload(
-  type: 'signin' | 'setRegularKey',
-  opts?: { userAddress?: string; regularKeyAddress?: string },
-): Promise<{ payloadId: string; qrUrl: string; deepLink: string }> {
-  const { data } = await api.post('/xaman/payload', { type, ...opts });
-  return data;
-}
-
-export async function pollXamanPayload(payloadId: string): Promise<{
-  resolved: boolean;
-  signed: boolean;
-  walletAddress: string | null;
-}> {
-  const { data } = await api.get(`/xaman/payload/${payloadId}`);
   return data;
 }
 

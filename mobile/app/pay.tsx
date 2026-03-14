@@ -79,7 +79,17 @@ export default function Pay() {
     setCardUid(id);
     setCardCtr(ctr);
     setCardDetected(true);
-    setCustomerName(name || 'Customer');
+    if (name) {
+      setCustomerName(name);
+    } else {
+      // Fetch customer name from backend
+      try {
+        const fetchedName = await getCardName(id);
+        setCustomerName(fetchedName);
+      } catch {
+        setCustomerName('Customer');
+      }
+    }
   };
 
   // Exposed for external NFC integrations: __tapyield_onCardRead(uid, ctr, name?)

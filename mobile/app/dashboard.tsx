@@ -139,6 +139,13 @@ export default function Dashboard() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionBtn}
+            onPress={() => router.push('/register-card')}
+          >
+            <Text style={styles.actionIcon}>📇</Text>
+            <Text style={styles.actionLabel}>Register Card</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionBtn}
             onPress={() => router.push('/pay')}
           >
             <Text style={styles.actionIcon}>💳</Text>
