@@ -22,7 +22,6 @@ export default function CreateGoal() {
   const [escrowTxHash, setEscrowTxHash] = useState('');
 
   const amountRef = useRef<TextInput>(null);
-  const daysRef = useRef<TextInput>(null);
 
   const displayAmount = amount ? `$${amount}` : '$0.00';
   const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
@@ -47,14 +46,13 @@ export default function CreateGoal() {
       if (!stored) throw new Error('No wallet found');
       const wallet = JSON.parse(stored);
 
-      // Convert days to minutes for demo (1 day = 1 minute for hackathon)
       const durationMinutes = parseInt(days);
       const unlockDate = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
 
       const result = await createGoal(wallet.address, wallet.seed, name, xrpAmount, unlockDate);
       setEscrowTxHash(result.escrowTxHash || '');
       setResultAmount(displayAmount);
-      setResultName(name.toUpperCase());
+      setResultName(name);
       setResultDays(parseInt(days));
       setState('success');
     } catch (err: any) {
@@ -64,168 +62,176 @@ export default function CreateGoal() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.container}>
       {state === 'input' && (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.flex}
+          style={s.flex}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView
-              style={styles.flex}
-              contentContainerStyle={styles.scrollContent}
+              style={s.flex}
+              contentContainerStyle={s.scrollContent}
               keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <TextInput
-                style={styles.nameInput}
-                placeholder="Goal Name"
-                placeholderTextColor={colors.textLight}
-                value={name}
-                onChangeText={setName}
-                returnKeyType="next"
-                onSubmitEditing={() => amountRef.current?.focus()}
-              />
+              <View style={s.card}>
+                <TextInput
+                  style={s.nameInput}
+                  placeholder="Goal Name"
+                  placeholderTextColor={colors.textLight}
+                  value={name}
+                  onChangeText={setName}
+                  returnKeyType="next"
+                  onSubmitEditing={() => amountRef.current?.focus()}
+                />
 
-              <View style={styles.amountSection}>
-                <Text style={styles.label}>GOAL AMOUNT</Text>
+                <Text style={s.label}>GOAL AMOUNT</Text>
                 <TextInput
                   ref={amountRef}
-                  style={[styles.amountInput, amount ? styles.amountActive : null]}
+                  style={[s.amountInput, amount ? s.amountActive : null]}
                   keyboardType="decimal-pad"
                   value={amount}
                   onChangeText={handleAmountChange}
                   placeholder="0.00"
                   placeholderTextColor={colors.textLight}
                 />
+
+                <View style={s.daysRow}>
+                  <Text style={s.daysText}>Lock for</Text>
+                  <TextInput
+                    style={s.daysInput}
+                    placeholder="0"
+                    placeholderTextColor={colors.textLight}
+                    keyboardType="number-pad"
+                    value={days}
+                    onChangeText={setDays}
+                    maxLength={3}
+                  />
+                  <Text style={s.daysText}>days</Text>
+                </View>
               </View>
 
-              <View style={styles.daysRow}>
-                <Text style={styles.daysText}>Goal unlocks in</Text>
-                <TextInput
-                  ref={daysRef}
-                  style={styles.daysInput}
-                  placeholder="0"
-                  placeholderTextColor={colors.textLight}
-                  keyboardType="number-pad"
-                  value={days}
-                  onChangeText={setDays}
-                  maxLength={3}
-                />
-                <Text style={styles.daysText}>days</Text>
-              </View>
-
-              <View style={styles.spacer} />
+              <View style={s.spacer} />
 
               <TouchableOpacity
-                style={[styles.primaryBtn, (!name || !amount || !days) && styles.btnDisabled]}
+                style={[s.primaryBtn, (!name || !amount || !days) && s.btnDisabled]}
                 onPress={handleCreate}
                 disabled={!name || !amount || !days}
               >
-                <Text style={styles.primaryBtnText}>Create Goal</Text>
+                <Text style={s.primaryBtnText}>Create Goal</Text>
               </TouchableOpacity>
-              <View style={styles.bottomPad} />
+              <View style={{ height: 40 }} />
             </ScrollView>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       )}
 
       {state === 'loading' && (
-        <View style={styles.centered}>
+        <View style={s.centered}>
           <ActivityIndicator size="large" color={colors.textMuted} />
-          <Text style={styles.stateLabel}>LOADING</Text>
-          <Text style={styles.stateDesc}>Creating goal...</Text>
+          <Text style={s.stateLabel}>CREATING GOAL</Text>
+          <Text style={s.stateDesc}>Locking funds on XRPL...</Text>
         </View>
       )}
 
       {state === 'success' && (
-        <View style={styles.centered}>
-          <Text style={styles.lockIcon}>🔒</Text>
-          <Text style={styles.successAmount}>{resultAmount}</Text>
-          <Text style={styles.successName}>{resultName}</Text>
+        <View style={s.centered}>
+          <View style={s.successCard}>
+            <Text style={s.successIcon}>🔒</Text>
+            <Text style={s.successAmount}>{resultAmount}</Text>
+            <Text style={s.successName}>{resultName}</Text>
 
-          <View style={styles.successDetails}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailValue}>$0.0000000</Text>
-              <Text style={styles.detailLabel}>YIELD</Text>
+            <View style={s.detailRow}>
+              <View style={s.detail}>
+                <Text style={s.detailValue}>{resultDays}d</Text>
+                <Text style={s.detailLabel}>LOCK PERIOD</Text>
+              </View>
+              <View style={s.detail}>
+                <Text style={s.detailValue}>{(parseFloat(amount || '0') / XRP_TO_USD).toFixed(2)}</Text>
+                <Text style={s.detailLabel}>XRP LOCKED</Text>
+              </View>
             </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailValue}>{resultDays} d</Text>
-              <Text style={styles.detailLabel}>UNTIL UNLOCK</Text>
-            </View>
+
+            {escrowTxHash ? (
+              <TouchableOpacity
+                style={s.explorerBtn}
+                onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${escrowTxHash}`)}
+              >
+                <Text style={s.explorerText}>View on XRPL Explorer →</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
-          <View style={styles.progressBar}>
-            <View style={styles.progressFill} />
-          </View>
+          <View style={s.spacer} />
 
-          {escrowTxHash ? (
-            <TouchableOpacity
-              style={styles.explorerBtn}
-              onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${escrowTxHash}`)}
-            >
-              <Text style={styles.explorerBtnText}>View on XRPL Explorer →</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          <View style={styles.spacer} />
-
-          <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
-            <Text style={styles.doneBtnText}>Done</Text>
+          <TouchableOpacity style={s.doneBtn} onPress={() => router.back()}>
+            <Text style={s.doneBtnText}>Done</Text>
           </TouchableOpacity>
-          <View style={styles.bottomPad} />
+          <View style={{ height: 40 }} />
         </View>
       )}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingTop: 12, paddingHorizontal: 24 },
+  scrollContent: { flexGrow: 1, paddingTop: 8, paddingHorizontal: 16 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
+  spacer: { flex: 1, minHeight: 32 },
+
+  card: { backgroundColor: colors.card, borderRadius: 16, padding: 20 },
 
   nameInput: {
-    fontSize: 18, color: colors.text, borderBottomWidth: 1,
-    borderBottomColor: colors.border, paddingBottom: 12, marginBottom: 32,
+    fontSize: 18, color: colors.text, width: '100%',
+    paddingBottom: 14, marginBottom: 24,
+    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
   },
-
-  amountSection: { marginBottom: 32 },
-  label: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  amountInput: { fontSize: 48, fontWeight: '300', color: colors.textLight, padding: 0 },
+  label: {
+    fontSize: 11, fontWeight: '600', color: colors.textMuted,
+    letterSpacing: 1, marginBottom: 12,
+  },
+  amountInput: { fontSize: 40, fontWeight: '300', color: colors.textLight, padding: 0, marginBottom: 24 },
   amountActive: { color: colors.text },
 
   daysRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   daysText: { color: colors.textMuted, fontSize: 14 },
   daysInput: {
-    fontSize: 16, fontWeight: '600', color: colors.text, borderBottomWidth: 1,
-    borderBottomColor: colors.border, paddingBottom: 4, width: 40, textAlign: 'center',
+    fontSize: 16, fontWeight: '600', color: colors.text,
+    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+    paddingBottom: 4, width: 44, textAlign: 'center',
   },
 
-  spacer: { flex: 1, minHeight: 40 },
-  bottomPad: { height: 40 },
-  primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
+  primaryBtn: {
+    backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center',
+  },
   btnDisabled: { opacity: 0.3 },
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
 
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  stateLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 24 },
-  stateDesc: { color: colors.text, fontSize: 18, marginTop: 12 },
+  stateLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, letterSpacing: 1, marginTop: 24 },
+  stateDesc: { fontSize: 16, color: colors.text, marginTop: 8 },
 
-  lockIcon: { fontSize: 48, marginBottom: 16 },
-  successAmount: { fontSize: 56, fontWeight: '700', color: colors.text },
-  successName: { fontSize: 14, color: colors.textMuted, letterSpacing: 1, marginTop: 8 },
-
-  successDetails: { flexDirection: 'row', gap: 40, marginTop: 32 },
-  detailRow: { alignItems: 'center' },
-  detailValue: { fontSize: 16, fontWeight: '600', color: colors.text },
+  // Success
+  successCard: {
+    backgroundColor: colors.card, borderRadius: 16, padding: 24,
+    width: '100%', alignItems: 'center',
+  },
+  successIcon: { fontSize: 40, marginBottom: 12 },
+  successAmount: { fontSize: 40, fontWeight: '700', color: colors.text },
+  successName: { fontSize: 14, color: colors.textMuted, marginTop: 4 },
+  detailRow: { flexDirection: 'row', gap: 40, marginTop: 24 },
+  detail: { alignItems: 'center' },
+  detailValue: { fontSize: 18, fontWeight: '600', color: colors.text },
   detailLabel: { fontSize: 10, color: colors.textMuted, letterSpacing: 0.5, marginTop: 4 },
+  explorerBtn: { marginTop: 20, paddingVertical: 10 },
+  explorerText: { fontSize: 14, fontWeight: '600', color: colors.text },
 
-  progressBar: { width: '80%', height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 24 },
-  progressFill: { width: '2%', height: 4, backgroundColor: colors.accent, borderRadius: 2 },
-
-  explorerBtn: { marginTop: 20, padding: 12 },
-  explorerBtnText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-
-  doneBtn: { backgroundColor: colors.card, borderRadius: 24, paddingVertical: 16, alignItems: 'center', width: '100%', borderWidth: 1, borderColor: colors.border },
+  doneBtn: {
+    backgroundColor: colors.card, borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', width: '100%',
+  },
   doneBtnText: { color: colors.text, fontSize: 16, fontWeight: '600' },
 });

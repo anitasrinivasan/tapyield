@@ -54,20 +54,17 @@ export default function Deposit() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.flex}
+        style={s.flex}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.content}>
-            <Text style={styles.title}>Add Funds</Text>
-            <Text style={styles.subtitle}>Your funds start earning yield immediately</Text>
-
-            <View style={styles.amountSection}>
-              <Text style={styles.label}>DEPOSIT AMOUNT</Text>
+          <View style={s.content}>
+            <View style={s.card}>
+              <Text style={s.label}>DEPOSIT AMOUNT</Text>
               <TextInput
-                style={[styles.amountInput, amount ? styles.amountActive : null]}
+                style={[s.amountInput, amount ? s.amountActive : null]}
                 keyboardType="decimal-pad"
                 value={amount}
                 onChangeText={handleAmountChange}
@@ -75,23 +72,23 @@ export default function Deposit() {
                 placeholderTextColor={colors.textLight}
                 autoFocus
               />
-              {amount ? <Text style={styles.xrpEquiv}>{xrpAmount} XRP</Text> : null}
+              {amount ? <Text style={s.xrpEquiv}>{xrpAmount} XRP</Text> : null}
             </View>
 
-            <View style={styles.spacer} />
+            <View style={s.spacer} />
 
             <TouchableOpacity
-              style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0 || loading) && styles.btnDisabled]}
+              style={[s.primaryBtn, (!amount || parseFloat(amount) <= 0 || loading) && s.btnDisabled]}
               onPress={handleDeposit}
               disabled={!amount || parseFloat(amount) <= 0 || loading}
             >
               {loading ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={styles.primaryBtnText}>Deposit {amount ? `$${amount}` : ''}</Text>
+                <Text style={s.primaryBtnText}>Deposit {amount ? `$${amount}` : ''}</Text>
               )}
             </TouchableOpacity>
-            <View style={styles.bottomPad} />
+            <View style={{ height: 40 }} />
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -99,23 +96,27 @@ export default function Deposit() {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  content: { flex: 1, paddingTop: 12, paddingHorizontal: 24 },
+  content: { flex: 1, paddingTop: 8, paddingHorizontal: 16 },
 
-  title: { fontSize: 28, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  subtitle: { color: colors.textMuted, fontSize: 14, marginBottom: 32 },
-
-  amountSection: { marginBottom: 20 },
-  label: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  amountInput: { fontSize: 48, fontWeight: '300', color: colors.textLight, padding: 0 },
+  card: {
+    backgroundColor: colors.card, borderRadius: 16, padding: 20,
+  },
+  label: {
+    fontSize: 11, fontWeight: '600', color: colors.textMuted,
+    letterSpacing: 1, marginBottom: 12,
+  },
+  amountInput: { fontSize: 40, fontWeight: '300', color: colors.textLight, padding: 0 },
   amountActive: { color: colors.text },
-  xrpEquiv: { color: colors.textMuted, fontSize: 14, marginTop: 4 },
+  xrpEquiv: { color: colors.textMuted, fontSize: 14, marginTop: 8 },
 
   spacer: { flex: 1 },
-  bottomPad: { height: 40 },
-  primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
+  primaryBtn: {
+    backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', marginHorizontal: 4,
+  },
   btnDisabled: { opacity: 0.3 },
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
 });

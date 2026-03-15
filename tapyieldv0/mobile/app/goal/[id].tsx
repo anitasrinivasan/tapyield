@@ -21,7 +21,6 @@ export default function GoalDetail() {
     const found = status.goals.find((g) => g.id === id);
     if (found) {
       setGoal(found);
-      // Find the matching escrow_create transaction (closest timestamp to goal creation)
       const escrow = status.transactions.find(
         (tx) => tx.type === 'escrow_create' && Math.abs(new Date(tx.timestamp).getTime() - new Date(found.createdAt).getTime()) < 60000
       );
@@ -33,8 +32,8 @@ export default function GoalDetail() {
 
   if (!goal) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
+      <SafeAreaView style={s.container}>
+        <View style={s.centered}>
           <ActivityIndicator size="large" color={colors.textMuted} />
         </View>
       </SafeAreaView>
@@ -50,62 +49,81 @@ export default function GoalDetail() {
   const progress = Math.min(1, Math.max(0, (totalDays - daysLeft) / totalDays));
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.goalName}>{goal.name}</Text>
-        <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
+    <SafeAreaView style={s.container}>
+      <View style={s.content}>
+        {/* Goal Info Card */}
+        <View style={s.card}>
+          <Text style={s.goalName}>{goal.name}</Text>
+          <Text style={s.goalAmount}>{usd(goal.targetAmount)}</Text>
 
-        <View style={styles.lockBadge}>
-          <Text style={styles.lockIcon}>🔒</Text>
-          <Text style={styles.lockText}>{daysLeft} days left of {totalDays}</Text>
+          <View style={s.lockBadge}>
+            <Text style={s.lockIcon}>🔒</Text>
+            <Text style={s.lockText}>{daysLeft} days left of {totalDays}</Text>
+          </View>
+
+          <View style={s.progressBar}>
+            <View style={[s.progressFill, { width: `${progress * 100}%` }]} />
+          </View>
         </View>
 
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        {/* Activity Card */}
+        <View style={s.card}>
+          <Text style={s.label}>ESCROW TRANSACTION</Text>
+          <TouchableOpacity
+            style={s.txRow}
+            onPress={() => escrowTx?.txHash && Linking.openURL(`https://testnet.xrpl.org/transactions/${escrowTx.txHash}`)}
+            activeOpacity={escrowTx?.txHash ? 0.7 : 1}
+          >
+            <View>
+              <Text style={s.txDate}>
+                {new Date(goal.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </Text>
+              <Text style={s.txAmount}>{usd(goal.targetAmount)} locked</Text>
+            </View>
+            {escrowTx?.txHash && <Text style={s.txArrow}>XRPL →</Text>}
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.sectionLabel}>RECENT ACTIVITY</Text>
-        <TouchableOpacity
-          style={styles.activityRow}
-          onPress={() => escrowTx?.txHash && Linking.openURL(`https://testnet.xrpl.org/transactions/${escrowTx.txHash}`)}
-          activeOpacity={escrowTx?.txHash ? 0.7 : 1}
-        >
-          <Text style={styles.activityDate}>
-            {new Date(goal.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}
-          </Text>
-          <Text style={styles.activityAmount}>{usd(goal.targetAmount)}</Text>
-          {escrowTx?.txHash && <Text style={styles.explorerHint}>View on XRPL Explorer →</Text>}
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, padding: 24, alignItems: 'center', paddingTop: 40 },
+  content: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
 
-  goalName: { fontSize: 18, color: colors.text, fontWeight: '600', marginBottom: 8 },
-  goalAmount: { fontSize: 48, fontWeight: '700', color: colors.text, marginBottom: 24 },
+  card: {
+    backgroundColor: colors.card, borderRadius: 16, padding: 20,
+    marginBottom: 12, alignItems: 'center',
+  },
+  label: {
+    fontSize: 11, fontWeight: '600', color: colors.textMuted,
+    letterSpacing: 1, marginBottom: 12, alignSelf: 'flex-start',
+  },
+
+  goalName: { fontSize: 16, color: colors.text, fontWeight: '500', marginBottom: 4 },
+  goalAmount: { fontSize: 40, fontWeight: '700', color: colors.text, marginBottom: 16 },
 
   lockBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: colors.card, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8,
-    borderWidth: 1, borderColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: colors.background, borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8,
   },
-  lockIcon: { fontSize: 14 },
+  lockIcon: { fontSize: 12 },
   lockText: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
 
-  progressBar: { width: '80%', height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 24, marginBottom: 40 },
+  progressBar: {
+    width: '100%', height: 4, backgroundColor: colors.background,
+    borderRadius: 2, marginTop: 20,
+  },
   progressFill: { height: 4, backgroundColor: colors.accent, borderRadius: 2 },
 
-  sectionLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 12, alignSelf: 'flex-start' },
-  activityRow: {
-    backgroundColor: colors.card, borderRadius: 12, padding: 16, width: '100%',
-    borderWidth: 1, borderColor: colors.border,
+  txRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    width: '100%',
   },
-  activityDate: { color: colors.textMuted, fontSize: 10, letterSpacing: 0.5, marginBottom: 4 },
-  activityAmount: { color: colors.text, fontSize: 20, fontWeight: '600' },
-  explorerHint: { color: colors.textMuted, fontSize: 10, marginTop: 8 },
+  txDate: { color: colors.textMuted, fontSize: 12, marginBottom: 4 },
+  txAmount: { color: colors.text, fontSize: 18, fontWeight: '600' },
+  txArrow: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
 });
