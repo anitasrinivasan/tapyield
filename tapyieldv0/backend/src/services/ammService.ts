@@ -1,12 +1,11 @@
 import { Wallet, xrpToDrops, dropsToXrp } from 'xrpl';
 import { getClient } from './xrplClient';
-import { getUser, setUser, ammConfig } from '../store';
+import { getUser, setUser, ensureUser, ammConfig } from '../store';
 
 export async function depositToAmm(address: string, seed: string, amountXrp: string) {
   const client = await getClient();
   const wallet = Wallet.fromSeed(seed);
-  const user = getUser(address);
-  if (!user) throw new Error('User not found. Create wallet first.');
+  const user = ensureUser(address, seed);
 
   const depositTx: any = {
     TransactionType: 'AMMDeposit',

@@ -121,6 +121,12 @@ export async function xamanGetPayloadStatus(uuid: string) {
   return data;
 }
 
+export async function seedDemo(): Promise<WalletCreateResponse & { demo: any }> {
+  // Seed makes ~5 sequential XRPL transactions, needs a longer timeout
+  const { data } = await api.post('/demo/seed', {}, { timeout: 120000 });
+  return data;
+}
+
 export function setApiBase(url: string) {
   api.defaults.baseURL = url;
 }

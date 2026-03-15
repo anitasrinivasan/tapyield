@@ -25,8 +25,13 @@ export default function Dashboard() {
     try {
       const data = await getWalletStatus(wallet.address);
       setStatus(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Status fetch error:', err);
+      // If backend doesn't know this wallet (redeployed), go back to welcome
+      if (err.response?.status === 500 || err.response?.status === 404) {
+        await AsyncStorage.removeItem('wallet');
+        router.replace('/');
+      }
     }
   }, [wallet]);
 

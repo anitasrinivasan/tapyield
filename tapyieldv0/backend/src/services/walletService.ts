@@ -1,7 +1,7 @@
 import { Wallet, xrpToDrops } from 'xrpl';
 import { getClient } from './xrplClient';
 import {
-  getUser, setUser, ammConfig,
+  getUser, setUser, ensureUser, ammConfig,
   setCard, deleteCard, findCardByAddress,
   setPendingRegularKey, getPendingRegularKey, deletePendingRegularKey,
 } from '../store';
@@ -135,10 +135,23 @@ export async function getWalletStatus(address: string) {
     // Account may not exist yet
   }
 
-  // Calculate AMM position value
+  // Calculate AMM position value — always check on-chain in case server restarted
   let ammXrpValue = 0;
-  if (user && user.lpTokenBalance > 0) {
+  try {
     ammXrpValue = await getAmmPositionXrpValue(address);
+  } catch {
+    // No AMM position
+  }
+
+  // Rehydrate LP token balance if we have an AMM position but user record is stale
+  if (user && ammXrpValue > 0 && user.lpTokenBalance === 0) {
+    const { getLpTokenBalance } = await import('./ammService');
+    user.lpTokenBalance = await getLpTokenBalance(address);
+    if (user.lpTokenBalance > 0 && user.originalDepositXrp === 0) {
+      // Estimate original deposit as current value (no yield tracking after restart, but no errors)
+      user.originalDepositXrp = ammXrpValue;
+    }
+    setUser(address, user);
   }
 
   const goals = user?.goals || [];

@@ -1,6 +1,6 @@
 import { Wallet, xrpToDrops, isoTimeToRippleTime } from 'xrpl';
 import { getClient } from './xrplClient';
-import { getUser, setUser } from '../store';
+import { getUser, setUser, ensureUser } from '../store';
 import { Goal } from '../types';
 import { getAmmPositionXrpValue } from './ammService';
 
@@ -13,8 +13,7 @@ export async function createGoal(
 ) {
   const client = await getClient();
   const wallet = Wallet.fromSeed(seed);
-  const user = getUser(address);
-  if (!user) throw new Error('User not found. Create wallet first.');
+  const user = ensureUser(address, seed);
 
   // Check spending balance
   const ammValue = await getAmmPositionXrpValue(address);
@@ -76,8 +75,7 @@ export async function createGoal(
 export async function releaseGoal(address: string, seed: string, goalId: string) {
   const client = await getClient();
   const wallet = Wallet.fromSeed(seed);
-  const user = getUser(address);
-  if (!user) throw new Error('User not found.');
+  const user = ensureUser(address, seed);
 
   const goal = user.goals.find(g => g.id === goalId);
   if (!goal) throw new Error('Goal not found.');

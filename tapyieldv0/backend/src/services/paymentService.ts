@@ -1,6 +1,6 @@
 import { Wallet, xrpToDrops } from 'xrpl';
 import { getClient } from './xrplClient';
-import { getUser, setUser } from '../store';
+import { getUser, setUser, ensureUser } from '../store';
 import { getAmmPositionXrpValue, withdrawFromAmm, depositToAmm } from './ammService';
 
 export async function makePayment(
@@ -12,8 +12,7 @@ export async function makePayment(
 ) {
   const client = await getClient();
   const wallet = Wallet.fromSeed(seed);
-  const user = getUser(address);
-  if (!user) throw new Error('User not found.');
+  const user = ensureUser(address, seed);
 
   // Check spending balance
   const ammValue = await getAmmPositionXrpValue(address);
