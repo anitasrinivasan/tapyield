@@ -1,7 +1,7 @@
 import { Wallet, xrpToDrops } from 'xrpl';
 import { getClient } from './xrplClient';
 import { getUser, setUser } from '../store';
-import { getAmmPositionXrpValue, withdrawFromAmm } from './ammService';
+import { getAmmPositionXrpValue, withdrawFromAmm, depositToAmm } from './ammService';
 
 export async function makePayment(
   address: string,
@@ -30,16 +30,28 @@ export async function makePayment(
   await withdrawFromAmm(address, seed, amountXrp);
 
   // Step 2: Send XRP payment to merchant
-  const paymentTx = {
-    TransactionType: 'Payment' as const,
-    Account: address,  // Customer's address (signer may be regular key)
-    Destination: merchantAddress,
-    Amount: xrpToDrops(amountXrp.toString()),
-  };
+  let result;
+  try {
+    const paymentTx = {
+      TransactionType: 'Payment' as const,
+      Account: address,  // Customer's address (signer may be regular key)
+      Destination: merchantAddress,
+      Amount: xrpToDrops(amountXrp.toString()),
+    };
 
-  const prepared = await client.autofill(paymentTx);
-  const signed = wallet.sign(prepared);
-  const result = await client.submitAndWait(signed.tx_blob);
+    const prepared = await client.autofill(paymentTx);
+    const signed = wallet.sign(prepared);
+    result = await client.submitAndWait(signed.tx_blob);
+  } catch (paymentErr) {
+    // Payment failed after AMM withdrawal — re-deposit to avoid fund loss
+    console.error('Payment failed, re-depositing to AMM:', paymentErr);
+    try {
+      await depositToAmm(address, seed, amountXrp.toString());
+    } catch (reDepositErr) {
+      console.error('Re-deposit also failed:', reDepositErr);
+    }
+    throw paymentErr;
+  }
 
   user.transactions.push({
     type: 'payment',

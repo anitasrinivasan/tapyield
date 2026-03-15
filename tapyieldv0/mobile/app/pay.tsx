@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ActivityIndicator, TextInput,
   StyleSheet, SafeAreaView, Alert, Linking, KeyboardAvoidingView,
-  TouchableWithoutFeedback, Keyboard, Platform,
+  TouchableWithoutFeedback, Keyboard, Platform, Animated, Easing,
 } from 'react-native';
-import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tapPayment, getCardName } from '../services/api';
 import { colors, XRP_TO_USD } from './theme';
@@ -22,12 +21,26 @@ export default function Pay() {
   const displayAmount = amount ? `$${amount}` : '$0.00';
   const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
 
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (state === 'nfc') {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.12, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [state]);
+
   const handleAmountChange = (text: string) => {
-    // Allow only valid decimal input
     const cleaned = text.replace(/[^0-9.]/g, '');
     const parts = cleaned.split('.');
-    if (parts.length > 2) return; // multiple dots
-    if (parts[1] && parts[1].length > 2) return; // more than 2 decimal places
+    if (parts.length > 2) return;
+    if (parts[1] && parts[1].length > 2) return;
     setAmount(cleaned);
   };
 
@@ -40,7 +53,6 @@ export default function Pay() {
     setState('nfc');
   };
 
-  // Called by Alex's NFC module when a customer's card is read
   const onCardRead = async (id: string) => {
     setCardUid(id);
     try {
@@ -52,7 +64,6 @@ export default function Pay() {
     processPayment(id);
   };
 
-  // Expose for Alex's NFC integration
   (globalThis as any).__tapyield_onCardRead = onCardRead;
 
   const processPayment = async (uid: string) => {
@@ -72,9 +83,8 @@ export default function Pay() {
     }
   };
 
-  // Demo: simulate NFC tap
   const simulateNfcTap = () => {
-    onCardRead('DEMO-UID-' + Date.now());
+    onCardRead('TAPYIELD-' + Date.now().toString(36).toUpperCase());
   };
 
   const resetPayment = () => {
@@ -87,28 +97,28 @@ export default function Pay() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.container}>
       {state === 'amount' && (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.flex}
+          style={s.flex}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.content}>
-              <TextInput
-                style={styles.merchantInput}
-                placeholder="Merchant Name"
-                placeholderTextColor={colors.textLight}
-                value={merchantName}
-                onChangeText={setMerchantName}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-
-              <View style={styles.amountSection}>
-                <Text style={styles.amountLabel}>PAYMENT AMOUNT</Text>
+            <View style={s.content}>
+              <View style={s.card}>
                 <TextInput
-                  style={[styles.amountInput, amount ? styles.amountActive : null]}
+                  style={s.merchantInput}
+                  placeholder="Merchant Name"
+                  placeholderTextColor={colors.textLight}
+                  value={merchantName}
+                  onChangeText={setMerchantName}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+
+                <Text style={s.label}>PAYMENT AMOUNT</Text>
+                <TextInput
+                  style={[s.amountInput, amount ? s.amountActive : null]}
                   keyboardType="decimal-pad"
                   value={amount}
                   onChangeText={handleAmountChange}
@@ -117,93 +127,139 @@ export default function Pay() {
                 />
               </View>
 
-              <View style={styles.spacer} />
+              <View style={s.spacer} />
 
               <TouchableOpacity
-                style={[styles.primaryBtn, (!amount || parseFloat(amount) <= 0) && styles.btnDisabled]}
+                style={[s.primaryBtn, (!amount || parseFloat(amount) <= 0) && s.btnDisabled]}
                 onPress={handleReadyForPayment}
                 disabled={!amount || parseFloat(amount) <= 0}
               >
-                <Text style={styles.primaryBtnText}>Ready for Payment</Text>
+                <Text style={s.primaryBtnText}>Ready for Payment</Text>
               </TouchableOpacity>
-              <View style={styles.bottomPad} />
+              <View style={{ height: 40 }} />
             </View>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       )}
 
       {state === 'nfc' && (
-        <TouchableOpacity style={styles.centered} onPress={simulateNfcTap} activeOpacity={0.8}>
-          <ActivityIndicator size="large" color={colors.textMuted} />
-          <Text style={styles.stateLabel}>WAITING FOR NFC</Text>
-          <Text style={styles.stateDesc}>Hold customer's card{'\n'}near phone</Text>
-        </TouchableOpacity>
+        <View style={s.centered}>
+          <View style={s.card}>
+            <Text style={s.nfcAmount}>{displayAmount}</Text>
+            <Text style={s.nfcSub}>{xrpAmount} XRP</Text>
+          </View>
+
+          <TouchableOpacity onPress={simulateNfcTap} activeOpacity={0.7}>
+            <Animated.View style={[s.nfcCircle, { transform: [{ scale: pulseAnim }] }]}>
+              <Text style={s.nfcIcon}>📱</Text>
+            </Animated.View>
+          </TouchableOpacity>
+
+          <Text style={s.stateLabel}>WAITING FOR CARD</Text>
+          <Text style={s.stateDesc}>Hold customer's card near phone</Text>
+          <Text style={s.tapHint}>Tap circle to simulate</Text>
+
+          <View style={s.spacer} />
+          <TouchableOpacity style={s.cancelBtn} onPress={() => setState('amount')}>
+            <Text style={s.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <View style={{ height: 40 }} />
+        </View>
       )}
 
       {state === 'processing' && (
-        <View style={styles.centered}>
+        <View style={s.centered}>
           <ActivityIndicator size="large" color={colors.textMuted} />
-          <Text style={styles.stateLabel}>LOADING</Text>
-          <Text style={styles.stateDesc}>Processing payment{'\n'}on XRPL...</Text>
+          <Text style={s.stateLabel}>PROCESSING</Text>
+          <Text style={s.stateDesc}>Sending payment on XRPL...</Text>
         </View>
       )}
 
       {state === 'success' && (
-        <View style={styles.centered}>
-          <Text style={styles.checkmark}>✓</Text>
-          <Text style={styles.successAmount}>{displayAmount}</Text>
-          <Text style={styles.successPaid}>paid</Text>
-          <View style={styles.txInfo}>
+        <View style={s.centered}>
+          <View style={s.card}>
+            <Text style={s.successCheck}>✓</Text>
+            <Text style={s.successAmount}>{displayAmount}</Text>
+            <Text style={s.successSub}>paid{customerName ? ` · ${customerName}` : ''}</Text>
+
             {txHash ? (
-              <>
-                <Text style={styles.txLabel}>Transaction ID: ...{txHash.slice(-4)}</Text>
-                <TouchableOpacity onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${txHash}`)}>
-                  <Text style={styles.txLink}>XRPL explorer: testnet.xrpl.org/</Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity
+                style={s.explorerBtn}
+                onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${txHash}`)}
+              >
+                <Text style={s.explorerText}>View on XRPL Explorer →</Text>
+              </TouchableOpacity>
             ) : null}
           </View>
-          <View style={styles.spacer} />
-          <TouchableOpacity style={styles.primaryBtn} onPress={resetPayment}>
-            <Text style={styles.primaryBtnText}>+ New Payment</Text>
+
+          <View style={s.spacer} />
+
+          <TouchableOpacity style={s.primaryBtn} onPress={resetPayment}>
+            <Text style={s.primaryBtnText}>+ New Payment</Text>
           </TouchableOpacity>
-          <View style={styles.bottomPad} />
+          <View style={{ height: 40 }} />
         </View>
       )}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  content: { flex: 1, paddingTop: 20, paddingHorizontal: 24 },
+  content: { flex: 1, paddingTop: 8, paddingHorizontal: 16 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
+  spacer: { flex: 1 },
 
-  merchantInput: {
-    fontSize: 16, color: colors.text, fontWeight: '500',
-    marginBottom: 40, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+  card: {
+    backgroundColor: colors.card, borderRadius: 16, padding: 20,
+    width: '100%', alignItems: 'center',
   },
 
-  amountSection: { marginBottom: 20 },
-  amountLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  amountInput: { fontSize: 48, fontWeight: '300', color: colors.textLight, padding: 0 },
+  merchantInput: {
+    fontSize: 16, color: colors.text, fontWeight: '500', width: '100%',
+    paddingBottom: 14, marginBottom: 20,
+    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+  },
+  label: {
+    fontSize: 11, fontWeight: '600', color: colors.textMuted,
+    letterSpacing: 1, marginBottom: 12, alignSelf: 'flex-start',
+  },
+  amountInput: {
+    fontSize: 40, fontWeight: '300', color: colors.textLight,
+    padding: 0, width: '100%',
+  },
   amountActive: { color: colors.text },
 
-  spacer: { flex: 1 },
-  bottomPad: { height: 40 },
-  primaryBtn: { backgroundColor: colors.accent, borderRadius: 24, paddingVertical: 16, alignItems: 'center' },
+  primaryBtn: {
+    backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', width: '100%',
+  },
   btnDisabled: { opacity: 0.3 },
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
 
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  stateLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 24 },
-  stateDesc: { color: colors.text, fontSize: 18, textAlign: 'center', marginTop: 12, lineHeight: 26 },
+  // NFC state
+  nfcAmount: { fontSize: 32, fontWeight: '700', color: colors.text },
+  nfcSub: { fontSize: 14, color: colors.textMuted, marginTop: 4 },
 
-  checkmark: { fontSize: 48, color: colors.text, marginBottom: 16 },
-  successAmount: { fontSize: 48, fontWeight: '300', color: colors.text },
-  successPaid: { fontSize: 16, color: colors.textMuted, marginTop: 4 },
-  txInfo: { marginTop: 32, alignItems: 'center' },
-  txLabel: { color: colors.textMuted, fontSize: 13 },
-  txLink: { color: colors.text, fontSize: 13, marginTop: 4, textDecorationLine: 'underline' },
+  nfcCircle: {
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: colors.accent, justifyContent: 'center', alignItems: 'center',
+    marginTop: 32, marginBottom: 24,
+  },
+  nfcIcon: { fontSize: 40 },
+
+  stateLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, letterSpacing: 1, marginTop: 8 },
+  stateDesc: { fontSize: 16, color: colors.text, marginTop: 8, textAlign: 'center' },
+  tapHint: { fontSize: 12, color: colors.textLight, marginTop: 8 },
+
+  cancelBtn: { padding: 12 },
+  cancelText: { fontSize: 16, fontWeight: '500', color: colors.textMuted },
+
+  // Success
+  successCheck: { fontSize: 40, color: colors.accent, marginBottom: 12 },
+  successAmount: { fontSize: 36, fontWeight: '700', color: colors.text },
+  successSub: { fontSize: 14, color: colors.textMuted, marginTop: 4 },
+  explorerBtn: { marginTop: 20, paddingVertical: 10 },
+  explorerText: { fontSize: 14, fontWeight: '600', color: colors.text },
 });

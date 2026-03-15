@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  StyleSheet, SafeAreaView, Alert,
+  StyleSheet, SafeAreaView, Alert, Animated, Easing, Image, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setupRegularKey, registerCard } from '../services/api';
+import {
+  setupRegularKey, registerCard, xamanSignIn,
+  xamanSetRegularKey, xamanGetPayloadStatus,
+} from '../services/api';
 import { colors } from './theme';
 
 type Step = 'xaman' | 'regular-key' | 'nfc' | 'done';
@@ -15,25 +18,90 @@ export default function RegisterCard() {
   const [loading, setLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   const [regularKeyAddress, setRegularKeyAddress] = useState('');
+  const [xamanQrUrl, setXamanQrUrl] = useState('');
+  const [xamanUuid, setXamanUuid] = useState('');
+  const [waitingForXaman, setWaitingForXaman] = useState(false);
 
-  const handleXamanSignIn = () => {
-    Alert.alert(
-      'Xaman Sign-In',
-      'Alex: Replace this with Xaman QR sign-in.\n\nFor demo: using wallet from AsyncStorage.',
-      [{
-        text: 'Use Demo Wallet',
-        onPress: async () => {
-          const stored = await AsyncStorage.getItem('wallet');
-          if (stored) {
-            const w = JSON.parse(stored);
-            setWalletAddress(w.address);
+  // Pulse animation for NFC tap
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (step === 'nfc') {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [step]);
+
+  // Poll Xaman payload status
+  useEffect(() => {
+    if (!xamanUuid || !waitingForXaman) return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await xamanGetPayloadStatus(xamanUuid);
+        if (status.resolved) {
+          clearInterval(interval);
+          setWaitingForXaman(false);
+          if (status.signed && status.account) {
+            setWalletAddress(status.account);
+            setXamanQrUrl('');
             setStep('regular-key');
           } else {
-            Alert.alert('Error', 'No wallet found. Create one first.');
+            Alert.alert('Sign-in Declined', 'Please try again.');
           }
-        },
-      }]
-    );
+        }
+      } catch {
+        // keep polling
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [xamanUuid, waitingForXaman]);
+
+  const handleXamanSignIn = async () => {
+    setLoading(true);
+    try {
+      const result = await xamanSignIn();
+      setXamanUuid(result.uuid);
+      setXamanQrUrl(result.qrUrl);
+      setWaitingForXaman(true);
+      // Try to open Xaman app directly
+      if (result.deepLink) {
+        Linking.openURL(result.deepLink).catch(() => {
+          // Deep link failed — user will scan QR instead
+        });
+      }
+    } catch (err: any) {
+      // Xaman not configured — fall back to demo wallet
+      console.log('Xaman not available, using demo wallet');
+      const stored = await AsyncStorage.getItem('wallet');
+      if (stored) {
+        const w = JSON.parse(stored);
+        setWalletAddress(w.address);
+        setStep('regular-key');
+      } else {
+        Alert.alert('Error', 'No wallet found. Create one first.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUseDemoWallet = async () => {
+    const stored = await AsyncStorage.getItem('wallet');
+    if (stored) {
+      const w = JSON.parse(stored);
+      setWalletAddress(w.address);
+      setXamanQrUrl('');
+      setWaitingForXaman(false);
+      setStep('regular-key');
+    } else {
+      Alert.alert('Error', 'No wallet found. Create one first.');
+    }
   };
 
   const handleSetupRegularKey = async () => {
@@ -42,11 +110,21 @@ export default function RegisterCard() {
     try {
       const result = await setupRegularKey(walletAddress);
       setRegularKeyAddress(result.regularKeyAddress);
-      Alert.alert(
-        'Regular Key Created',
-        `Alex: Sign SetRegularKey in Xaman with:\nRegularKey: ${result.regularKeyAddress.slice(0, 12)}...`,
-        [{ text: 'Continue (Demo)', onPress: () => setStep('nfc') }]
-      );
+
+      // Try Xaman signing for SetRegularKey
+      try {
+        const xaman = await xamanSetRegularKey(walletAddress, result.regularKeyAddress);
+        setXamanUuid(xaman.uuid);
+        setXamanQrUrl(xaman.qrUrl);
+        setWaitingForXaman(true);
+        if (xaman.deepLink) {
+          Linking.openURL(xaman.deepLink).catch(() => {});
+        }
+        // Poll will handle the transition
+      } catch {
+        // Xaman not available — auto-advance for demo
+        setStep('nfc');
+      }
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || err.message);
     } finally {
@@ -54,12 +132,30 @@ export default function RegisterCard() {
     }
   };
 
+  // Poll for SetRegularKey signing → advance to NFC step
+  useEffect(() => {
+    if (!xamanUuid || !waitingForXaman || step !== 'regular-key') return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await xamanGetPayloadStatus(xamanUuid);
+        if (status.resolved) {
+          clearInterval(interval);
+          setWaitingForXaman(false);
+          setXamanQrUrl('');
+          if (status.signed) {
+            setStep('nfc');
+          } else {
+            Alert.alert('Authorization Declined', 'Please try again.');
+          }
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [xamanUuid, waitingForXaman, step]);
+
   const handleNfcTap = () => {
-    Alert.alert(
-      'Tap NFC Card',
-      'Alex: Replace this with NfcManager.getTag().id',
-      [{ text: 'Simulate Tap', onPress: () => registerCardOnBackend('DEMO-UID-' + Date.now()) }]
-    );
+    // Simulate NFC card tap for demo
+    registerCardOnBackend('TAPYIELD-' + Date.now().toString(36).toUpperCase());
   };
 
   const registerCardOnBackend = async (uid: string) => {
@@ -74,16 +170,8 @@ export default function RegisterCard() {
     }
   };
 
+  // Expose for external NFC integration
   (globalThis as any).__tapyield_registerCard = registerCardOnBackend;
-
-  const stepConfig = {
-    'xaman': { number: 1, title: 'Sign in with Xaman', description: 'Connect your XRPL wallet', action: handleXamanSignIn, buttonText: 'Sign In with Xaman' },
-    'regular-key': { number: 2, title: 'Authorize Card Payments', description: 'Set up a regular key so your card can make payments without exposing your master key', action: handleSetupRegularKey, buttonText: 'Authorize' },
-    'nfc': { number: 3, title: 'Tap Your NFC Card', description: 'Hold your TapYield card against the phone', action: handleNfcTap, buttonText: 'Ready to Tap' },
-    'done': { number: 4, title: 'Card Registered!', description: 'Your card is ready to use for tap-to-pay', action: () => router.back(), buttonText: 'Done' },
-  };
-
-  const current = stepConfig[step];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -91,11 +179,14 @@ export default function RegisterCard() {
         <Text style={styles.title}>Register NFC Card</Text>
         <Text style={styles.subtitle}>Link your card for tap-to-pay</Text>
 
+        {/* Step indicators */}
         <View style={styles.steps}>
-          {(['xaman', 'regular-key', 'nfc', 'done'] as Step[]).map((s) => {
-            const config = stepConfig[s];
+          {(['xaman', 'regular-key', 'nfc', 'done'] as Step[]).map((s, i) => {
+            const stepNames = ['Connect Wallet', 'Authorize', 'Tap Card', 'Done'];
+            const stepNumber = i + 1;
+            const currentNumber = ['xaman', 'regular-key', 'nfc', 'done'].indexOf(step) + 1;
             const isActive = s === step;
-            const isDone = config.number < current.number;
+            const isDone = stepNumber < currentNumber;
             return (
               <View key={s} style={styles.stepRow}>
                 <View style={[
@@ -107,7 +198,7 @@ export default function RegisterCard() {
                     styles.stepNumber,
                     (isDone || isActive) && styles.stepNumberActive,
                   ]}>
-                    {isDone ? '✓' : config.number}
+                    {isDone ? '✓' : stepNumber}
                   </Text>
                 </View>
                 <Text style={[
@@ -115,34 +206,109 @@ export default function RegisterCard() {
                   isActive && styles.stepTitleActive,
                   isDone && styles.stepTitleDone,
                 ]}>
-                  {config.title}
+                  {stepNames[i]}
                 </Text>
               </View>
             );
           })}
         </View>
 
+        {/* Current step content */}
         <View style={styles.currentStep}>
-          <Text style={styles.currentTitle}>{current.title}</Text>
-          <Text style={styles.currentDesc}>{current.description}</Text>
-
-          {walletAddress && step !== 'xaman' && (
-            <Text style={styles.walletInfo}>
-              Wallet: {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
-            </Text>
+          {step === 'xaman' && (
+            <>
+              {xamanQrUrl ? (
+                <>
+                  <Text style={styles.currentTitle}>Scan with Xaman</Text>
+                  <Text style={styles.currentDesc}>Open Xaman on your phone and scan this QR code</Text>
+                  <Image source={{ uri: xamanQrUrl }} style={styles.qrImage} />
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={handleUseDemoWallet}>
+                    <Text style={styles.secondaryBtnText}>Use Demo Wallet Instead</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.currentTitle}>Connect Wallet</Text>
+                  <Text style={styles.currentDesc}>Sign in with Xaman to connect your XRPL wallet</Text>
+                  <TouchableOpacity
+                    style={[styles.button, loading && styles.buttonDisabled]}
+                    onPress={handleXamanSignIn}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={colors.white} />
+                    ) : (
+                      <Text style={styles.buttonText}>Sign In with Xaman</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </>
           )}
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={current.action}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.buttonText}>{current.buttonText}</Text>
-            )}
-          </TouchableOpacity>
+          {step === 'regular-key' && (
+            <>
+              {xamanQrUrl ? (
+                <>
+                  <Text style={styles.currentTitle}>Approve in Xaman</Text>
+                  <Text style={styles.currentDesc}>Scan to authorize card payments on your wallet</Text>
+                  <Image source={{ uri: xamanQrUrl }} style={styles.qrImage} />
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={() => { setXamanQrUrl(''); setWaitingForXaman(false); setStep('nfc'); }}>
+                    <Text style={styles.secondaryBtnText}>Skip for Demo</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.currentTitle}>Authorize Card</Text>
+                  <Text style={styles.currentDesc}>Set up a regular key so your card can make payments without exposing your master key</Text>
+                  {walletAddress && (
+                    <Text style={styles.walletInfo}>
+                      Wallet: {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
+                    </Text>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.button, loading && styles.buttonDisabled]}
+                    onPress={handleSetupRegularKey}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={colors.white} />
+                    ) : (
+                      <Text style={styles.buttonText}>Authorize</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </>
+          )}
+
+          {step === 'nfc' && (
+            <>
+              <Text style={styles.currentTitle}>Tap Your Card</Text>
+              <Text style={styles.currentDesc}>Hold your TapYield card against the phone</Text>
+              <TouchableOpacity onPress={handleNfcTap} disabled={loading} activeOpacity={0.7}>
+                <Animated.View style={[styles.nfcCircle, { transform: [{ scale: pulseAnim }] }]}>
+                  {loading ? (
+                    <ActivityIndicator size="large" color={colors.white} />
+                  ) : (
+                    <Text style={styles.nfcIcon}>📱</Text>
+                  )}
+                </Animated.View>
+              </TouchableOpacity>
+              <Text style={styles.tapHint}>Tap to simulate card read</Text>
+            </>
+          )}
+
+          {step === 'done' && (
+            <>
+              <Text style={styles.checkmark}>✓</Text>
+              <Text style={styles.currentTitle}>Card Registered!</Text>
+              <Text style={styles.currentDesc}>Your card is ready for tap-to-pay</Text>
+              <TouchableOpacity style={styles.button} onPress={() => router.back()}>
+                <Text style={styles.buttonText}>Done</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -174,8 +340,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, alignItems: 'center',
   },
   currentTitle: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  currentDesc: { color: colors.textMuted, fontSize: 14, textAlign: 'center', marginBottom: 20 },
+  currentDesc: { color: colors.textMuted, fontSize: 14, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
   walletInfo: { color: colors.textMuted, fontSize: 12, fontFamily: 'monospace', marginBottom: 16 },
+
+  qrImage: { width: 200, height: 200, marginBottom: 20, borderRadius: 8 },
 
   button: {
     backgroundColor: colors.accent, borderRadius: 24, padding: 16,
@@ -183,4 +351,19 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
+
+  secondaryBtn: {
+    padding: 12, alignItems: 'center', width: '100%',
+  },
+  secondaryBtnText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
+
+  nfcCircle: {
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: colors.accent, justifyContent: 'center', alignItems: 'center',
+    marginBottom: 16,
+  },
+  nfcIcon: { fontSize: 40 },
+  tapHint: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
+
+  checkmark: { fontSize: 48, color: colors.accent, marginBottom: 12 },
 });
