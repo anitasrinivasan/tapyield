@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ActivityIndicator, TextInput,
   StyleSheet, SafeAreaView, Alert, Linking, KeyboardAvoidingView,
-  TouchableWithoutFeedback, Keyboard, Platform,
+  TouchableWithoutFeedback, Keyboard, Platform, Animated, Easing,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +22,22 @@ export default function Pay() {
   const displayAmount = amount ? `$${amount}` : '$0.00';
   const xrpAmount = amount ? (parseFloat(amount) / XRP_TO_USD).toFixed(2) : '0';
 
+  // Pulse animation for NFC waiting state
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (state === 'nfc') {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [state]);
+
   const handleAmountChange = (text: string) => {
     // Allow only valid decimal input
     const cleaned = text.replace(/[^0-9.]/g, '');
@@ -40,7 +56,7 @@ export default function Pay() {
     setState('nfc');
   };
 
-  // Called by Alex's NFC module when a customer's card is read
+  // Called by NFC module when a customer's card is read
   const onCardRead = async (id: string) => {
     setCardUid(id);
     try {
@@ -52,7 +68,7 @@ export default function Pay() {
     processPayment(id);
   };
 
-  // Expose for Alex's NFC integration
+  // Expose for external NFC integration
   (globalThis as any).__tapyield_onCardRead = onCardRead;
 
   const processPayment = async (uid: string) => {
@@ -74,7 +90,7 @@ export default function Pay() {
 
   // Demo: simulate NFC tap
   const simulateNfcTap = () => {
-    onCardRead('DEMO-UID-' + Date.now());
+    onCardRead('TAPYIELD-' + Date.now().toString(36).toUpperCase());
   };
 
   const resetPayment = () => {
@@ -133,18 +149,33 @@ export default function Pay() {
       )}
 
       {state === 'nfc' && (
-        <TouchableOpacity style={styles.centered} onPress={simulateNfcTap} activeOpacity={0.8}>
-          <ActivityIndicator size="large" color={colors.textMuted} />
-          <Text style={styles.stateLabel}>WAITING FOR NFC</Text>
-          <Text style={styles.stateDesc}>Hold customer's card{'\n'}near phone</Text>
-        </TouchableOpacity>
+        <View style={styles.centered}>
+          <Text style={styles.nfcAmount}>{displayAmount}</Text>
+          <Text style={styles.nfcAmountLabel}>{xrpAmount} XRP</Text>
+
+          <TouchableOpacity onPress={simulateNfcTap} activeOpacity={0.7}>
+            <Animated.View style={[styles.nfcCircle, { transform: [{ scale: pulseAnim }] }]}>
+              <Text style={styles.nfcIcon}>📱</Text>
+            </Animated.View>
+          </TouchableOpacity>
+
+          <Text style={styles.stateLabel}>WAITING FOR CARD</Text>
+          <Text style={styles.stateDesc}>Hold customer's card near phone</Text>
+          <Text style={styles.tapHint}>Tap circle to simulate</Text>
+
+          <View style={styles.spacer} />
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => setState('amount')}>
+            <Text style={styles.cancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+          <View style={styles.bottomPad} />
+        </View>
       )}
 
       {state === 'processing' && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.textMuted} />
-          <Text style={styles.stateLabel}>LOADING</Text>
-          <Text style={styles.stateDesc}>Processing payment{'\n'}on XRPL...</Text>
+          <Text style={styles.stateLabel}>PROCESSING</Text>
+          <Text style={styles.stateDesc}>Sending payment on XRPL...</Text>
         </View>
       )}
 
@@ -153,12 +184,13 @@ export default function Pay() {
           <Text style={styles.checkmark}>✓</Text>
           <Text style={styles.successAmount}>{displayAmount}</Text>
           <Text style={styles.successPaid}>paid</Text>
+          {customerName ? <Text style={styles.customerName}>{customerName}</Text> : null}
           <View style={styles.txInfo}>
             {txHash ? (
               <>
-                <Text style={styles.txLabel}>Transaction ID: ...{txHash.slice(-4)}</Text>
+                <Text style={styles.txLabel}>Tx: ...{txHash.slice(-8)}</Text>
                 <TouchableOpacity onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${txHash}`)}>
-                  <Text style={styles.txLink}>XRPL explorer: testnet.xrpl.org/</Text>
+                  <Text style={styles.txLink}>View on XRPL Explorer →</Text>
                 </TouchableOpacity>
               </>
             ) : null}
@@ -197,13 +229,29 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
 
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  stateLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 24 },
-  stateDesc: { color: colors.text, fontSize: 18, textAlign: 'center', marginTop: 12, lineHeight: 26 },
 
-  checkmark: { fontSize: 48, color: colors.text, marginBottom: 16 },
+  nfcAmount: { fontSize: 40, fontWeight: '300', color: colors.text, marginBottom: 4 },
+  nfcAmountLabel: { fontSize: 14, color: colors.textMuted, marginBottom: 32 },
+
+  nfcCircle: {
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: colors.accent, justifyContent: 'center', alignItems: 'center',
+    marginBottom: 24,
+  },
+  nfcIcon: { fontSize: 48 },
+
+  stateLabel: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 8 },
+  stateDesc: { color: colors.text, fontSize: 18, textAlign: 'center', marginTop: 8, lineHeight: 26 },
+  tapHint: { color: colors.textLight, fontSize: 12, marginTop: 8 },
+
+  cancelBtn: { padding: 12 },
+  cancelBtnText: { color: colors.textMuted, fontSize: 16, fontWeight: '500' },
+
+  checkmark: { fontSize: 48, color: colors.accent, marginBottom: 16 },
   successAmount: { fontSize: 48, fontWeight: '300', color: colors.text },
   successPaid: { fontSize: 16, color: colors.textMuted, marginTop: 4 },
+  customerName: { fontSize: 14, color: colors.textMuted, marginTop: 8 },
   txInfo: { marginTop: 32, alignItems: 'center' },
-  txLabel: { color: colors.textMuted, fontSize: 13 },
-  txLink: { color: colors.text, fontSize: 13, marginTop: 4, textDecorationLine: 'underline' },
+  txLabel: { color: colors.textMuted, fontSize: 13, fontFamily: 'monospace' },
+  txLink: { color: colors.text, fontSize: 14, marginTop: 8, fontWeight: '600' },
 });
