@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, RefreshControl,
-  StyleSheet, SafeAreaView, TouchableOpacity,
+  StyleSheet, SafeAreaView, TouchableOpacity, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -63,7 +63,12 @@ export default function Activity() {
             </View>
           )}
           {transactions.map((tx, i) => (
-            <View key={tx.txHash || i} style={styles.activityRow}>
+            <TouchableOpacity
+              key={tx.txHash || i}
+              style={styles.activityRow}
+              onPress={() => tx.txHash && Linking.openURL(`https://testnet.xrpl.org/transactions/${tx.txHash}`)}
+              activeOpacity={tx.txHash ? 0.7 : 1}
+            >
               <View style={styles.activityLeft}>
                 <Text style={styles.activityDate}>
                   {new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}
@@ -77,10 +82,13 @@ export default function Activity() {
                    tx.type === 'escrow_finish' ? 'Goal Released' : tx.type}
                 </Text>
               </View>
-              <Text style={[styles.activityAmount, tx.type === 'payment' && styles.amountNegative]}>
-                {tx.type === 'payment' || tx.type === 'escrow_create' ? '-' : '+'}{usd(tx.amount)}
-              </Text>
-            </View>
+              <View style={styles.activityRight}>
+                <Text style={[styles.activityAmount, tx.type === 'payment' && styles.amountNegative]}>
+                  {tx.type === 'payment' || tx.type === 'escrow_create' ? '-' : '+'}{usd(tx.amount)}
+                </Text>
+                {tx.txHash && <Text style={styles.explorerHint}>View on XRPL →</Text>}
+              </View>
+            </TouchableOpacity>
           ))}
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -115,8 +123,10 @@ const styles = StyleSheet.create({
   activityLeft: { flex: 1, marginRight: 12 },
   activityDate: { color: colors.textMuted, fontSize: 10, letterSpacing: 0.5, marginBottom: 4 },
   activityType: { color: colors.text, fontSize: 14, fontWeight: '500' },
+  activityRight: { alignItems: 'flex-end' },
   activityAmount: { color: colors.text, fontSize: 20, fontWeight: '600' },
   amountNegative: { color: '#C62828' },
+  explorerHint: { color: colors.textMuted, fontSize: 10, marginTop: 4 },
 
   emptyRow: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { color: colors.textMuted, fontSize: 14 },

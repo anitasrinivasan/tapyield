@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
   StyleSheet, SafeAreaView, Alert, KeyboardAvoidingView,
-  TouchableWithoutFeedback, Keyboard, Platform, ScrollView,
+  TouchableWithoutFeedback, Keyboard, Platform, ScrollView, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +19,7 @@ export default function CreateGoal() {
   const [resultAmount, setResultAmount] = useState('');
   const [resultName, setResultName] = useState('');
   const [resultDays, setResultDays] = useState(0);
+  const [escrowTxHash, setEscrowTxHash] = useState('');
 
   const amountRef = useRef<TextInput>(null);
   const daysRef = useRef<TextInput>(null);
@@ -50,7 +51,8 @@ export default function CreateGoal() {
       const durationMinutes = parseInt(days);
       const unlockDate = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
 
-      await createGoal(wallet.address, wallet.seed, name, xrpAmount, unlockDate);
+      const result = await createGoal(wallet.address, wallet.seed, name, xrpAmount, unlockDate);
+      setEscrowTxHash(result.escrowTxHash || '');
       setResultAmount(displayAmount);
       setResultName(name.toUpperCase());
       setResultDays(parseInt(days));
@@ -156,6 +158,15 @@ export default function CreateGoal() {
             <View style={styles.progressFill} />
           </View>
 
+          {escrowTxHash ? (
+            <TouchableOpacity
+              style={styles.explorerBtn}
+              onPress={() => Linking.openURL(`https://testnet.xrpl.org/transactions/${escrowTxHash}`)}
+            >
+              <Text style={styles.explorerBtnText}>View on XRPL Explorer →</Text>
+            </TouchableOpacity>
+          ) : null}
+
           <View style={styles.spacer} />
 
           <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
@@ -211,6 +222,9 @@ const styles = StyleSheet.create({
 
   progressBar: { width: '80%', height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 24 },
   progressFill: { width: '2%', height: 4, backgroundColor: colors.accent, borderRadius: 2 },
+
+  explorerBtn: { marginTop: 20, padding: 12 },
+  explorerBtnText: { color: colors.text, fontSize: 14, fontWeight: '600' },
 
   doneBtn: { backgroundColor: colors.card, borderRadius: 24, paddingVertical: 16, alignItems: 'center', width: '100%', borderWidth: 1, borderColor: colors.border },
   doneBtnText: { color: colors.text, fontSize: 16, fontWeight: '600' },

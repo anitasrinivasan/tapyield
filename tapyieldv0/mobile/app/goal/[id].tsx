@@ -1,15 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ActivityIndicator,
+  TouchableOpacity, Linking,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getWalletStatus, Goal } from '../../services/api';
+import { getWalletStatus, Goal, Transaction } from '../../services/api';
 import { colors, usd } from '../theme';
 
 export default function GoalDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [goal, setGoal] = useState<Goal | null>(null);
+  const [escrowTx, setEscrowTx] = useState<Transaction | null>(null);
 
   const loadGoal = useCallback(async () => {
     const stored = await AsyncStorage.getItem('wallet');
@@ -17,7 +19,14 @@ export default function GoalDetail() {
     const wallet = JSON.parse(stored);
     const status = await getWalletStatus(wallet.address);
     const found = status.goals.find((g) => g.id === id);
-    if (found) setGoal(found);
+    if (found) {
+      setGoal(found);
+      // Find the matching escrow_create transaction (closest timestamp to goal creation)
+      const escrow = status.transactions.find(
+        (tx) => tx.type === 'escrow_create' && Math.abs(new Date(tx.timestamp).getTime() - new Date(found.createdAt).getTime()) < 60000
+      );
+      if (escrow) setEscrowTx(escrow);
+    }
   }, [id]);
 
   useEffect(() => { loadGoal(); }, [loadGoal]);
@@ -56,12 +65,17 @@ export default function GoalDetail() {
         </View>
 
         <Text style={styles.sectionLabel}>RECENT ACTIVITY</Text>
-        <View style={styles.activityRow}>
+        <TouchableOpacity
+          style={styles.activityRow}
+          onPress={() => escrowTx?.txHash && Linking.openURL(`https://testnet.xrpl.org/transactions/${escrowTx.txHash}`)}
+          activeOpacity={escrowTx?.txHash ? 0.7 : 1}
+        >
           <Text style={styles.activityDate}>
             {new Date(goal.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}
           </Text>
           <Text style={styles.activityAmount}>{usd(goal.targetAmount)}</Text>
-        </View>
+          {escrowTx?.txHash && <Text style={styles.explorerHint}>View on XRPL Explorer →</Text>}
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -93,4 +107,5 @@ const styles = StyleSheet.create({
   },
   activityDate: { color: colors.textMuted, fontSize: 10, letterSpacing: 0.5, marginBottom: 4 },
   activityAmount: { color: colors.text, fontSize: 20, fontWeight: '600' },
+  explorerHint: { color: colors.textMuted, fontSize: 10, marginTop: 8 },
 });
