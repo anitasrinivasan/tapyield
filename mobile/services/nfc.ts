@@ -1,40 +1,32 @@
-import NfcManager, { NfcTech } from 'react-native-nfc-manager';
+import NfcManager, { NfcTech, Ndef } from 'react-native-nfc-manager';
 
-// Call once at app startup (e.g. in _layout.tsx)
 export async function initNfc(): Promise<void> {
   await NfcManager.start();
 }
 
 export interface NfcCardData {
-  uid: string;  // NTAG216 hardware UID as uppercase hex, e.g. "04A3BC12D567E0"
-  ctr: number;  // NTAG216 NFC counter (24-bit, increments each power cycle)
+  uid: string;  // identifier from URL ?uid= param
+  ctr: number;  // counter from URL ?ctr= param
 }
 
-// Read the NTAG216 hardware UID and tap counter.
-// Uses NfcA (ISO 14443-3A) to access the hardware UID and send the READ_CNT command.
+// Read an NDEF URL record from the card and extract uid + ctr query params.
+// Card must be programmed with a URL like:
+//   http://<backend>/pay?uid=<identifier>&ctr=<counter>
 export async function readNfcCard(): Promise<NfcCardData> {
-  await NfcManager.requestTechnology(NfcTech.NfcA);
+  await NfcManager.requestTechnology(NfcTech.Ndef);
   try {
     const tag = await NfcManager.getTag();
-    if (!tag?.id) throw new Error('Could not read card UID');
+    const record = tag?.ndefMessage?.[0];
+    if (!record) throw new Error('No NDEF record found on card');
 
-    const uid = (tag.id as number[])
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-      .toUpperCase();
+    const url = Ndef.uri.decodePayload(new Uint8Array(record.payload as number[]));
+    if (!url) throw new Error('Could not decode URL from card');
 
-    // READ_CNT command: 0x39 = command, 0x02 = NFC counter address on NTAG21x
-    // Response is 3 bytes little-endian counter + 1 byte ACK
-    let ctr = 0;
-    try {
-      const response = await NfcManager.nfcAHandler.transceive([0x39, 0x02]);
-      if (response.length >= 3) {
-        ctr = response[0] | (response[1] << 8) | (response[2] << 16);
-      }
-    } catch {
-      // Counter read unsupported on this device or card variant — use 0
-      ctr = 0;
-    }
+    const params = new URL(url).searchParams;
+    const uid = params.get('uid');
+    const ctr = parseInt(params.get('ctr') ?? '0', 10);
+
+    if (!uid) throw new Error('Card URL is missing the ?uid= parameter');
 
     return { uid, ctr };
   } finally {

@@ -106,15 +106,17 @@ export default function Pay() {
 
         <View style={styles.amountSection}>
           <Text style={styles.amountLabel}>PAYMENT AMOUNT</Text>
-          <TextInput
-            style={styles.amountInput}
-            placeholder="$0.00"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            keyboardType="decimal-pad"
-            value={amount ? `$${amount}` : ''}
-            onChangeText={text => setAmount(text.replace(/[^0-9.]/g, ''))}
-            textAlign="center"
-          />
+          <View style={styles.amountRow}>
+            <Text style={styles.amountDollar}>$</Text>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="0.00"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              keyboardType="decimal-pad"
+              value={amount}
+              onChangeText={text => setAmount(text.replace(/[^0-9.]/g, ''))}
+            />
+          </View>
           {hasAmount && (
             <Text style={styles.amountXrp}>{amount} XRP</Text>
           )}
@@ -145,7 +147,11 @@ export default function Pay() {
 
         <View style={styles.centeredContent}>
           <View style={styles.nfcIconContainer}>
-            <Text style={styles.nfcWaves}>{')))'}}</Text>
+            <View style={styles.nfcArcs}>
+              <Text style={styles.nfcArc1}>)</Text>
+              <Text style={styles.nfcArc2}>)</Text>
+              <Text style={styles.nfcArc3}>)</Text>
+            </View>
           </View>
           <Text style={styles.statusBadge}>WAITING FOR NFC</Text>
           <Text style={styles.statusMessage}>Hold customer's card near phone</Text>
@@ -249,11 +255,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 16,
   },
-  amountInput: {
-    fontSize: 64,
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  amountDollar: {
+    fontSize: 40,
     fontWeight: '700',
     color: '#FFFFFF',
-    minWidth: 200,
+    marginBottom: 8,
+    marginRight: 4,
+  },
+  amountInput: {
+    fontSize: 72,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    minWidth: 140,
   },
   amountXrp: {
     color: 'rgba(255,255,255,0.4)',
@@ -288,12 +305,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  nfcWaves: {
-    fontSize: 64,
-    color: '#FFFFFF',
-    fontWeight: '200',
-    letterSpacing: -8,
-  },
+  nfcArcs: { flexDirection: 'row', alignItems: 'center' },
+  nfcArc1: { fontSize: 64, color: '#FFFFFF', fontWeight: '200', marginRight: -16 },
+  nfcArc2: { fontSize: 48, color: '#FFFFFF', fontWeight: '200', marginRight: -12 },
+  nfcArc3: { fontSize: 36, color: '#FFFFFF', fontWeight: '200' },
   statusBadge: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 13,

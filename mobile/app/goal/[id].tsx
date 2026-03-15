@@ -95,7 +95,7 @@ export default function GoalDetail() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#111" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#555" />}
         showsVerticalScrollIndicator={false}
       >
         {/* Back button */}
@@ -105,7 +105,7 @@ export default function GoalDetail() {
           </TouchableOpacity>
         </View>
 
-        {/* Goal header */}
+        {/* Goal name + amount — centered per Figma */}
         <View style={styles.goalHeader}>
           <Text style={styles.goalName}>{goal.name}</Text>
           <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
@@ -113,19 +113,19 @@ export default function GoalDetail() {
 
         {/* Progress card */}
         <View style={styles.progressCard}>
-          <View style={styles.progressRow}>
+          <View style={styles.progressTopRow}>
             <Text style={styles.lockIcon}>🔒</Text>
-            <Text style={styles.daysLeft}>
+            <Text style={styles.daysLeftText}>
               {isReady ? 'Ready to unlock!' : `${daysLeft} days left`}
             </Text>
-            <Text style={styles.totalDays}>of {totalDays} days</Text>
+            <Text style={styles.totalDaysText}>of {totalDays} days</Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
           </View>
         </View>
 
-        {/* Release button (if ready) */}
+        {/* Release button — only shows when unlockable */}
         {isReady && goal.status === 'locked' && (
           <TouchableOpacity
             style={[styles.releaseBtn, releasing && styles.releaseBtnDisabled]}
@@ -158,7 +158,7 @@ export default function GoalDetail() {
             </View>
           )}
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 48 }} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -171,51 +171,68 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#666', fontSize: 16 },
 
-  topBar: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  topBar: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#111111', justifyContent: 'center', alignItems: 'center',
   },
-  backArrow: { color: '#FFFFFF', fontSize: 24, fontWeight: '300', marginTop: -2, marginLeft: -2 },
+  backArrow: { color: '#FFFFFF', fontSize: 26, fontWeight: '300', marginTop: -2, marginLeft: -2 },
 
+  // Centered header per Figma
   goalHeader: {
+    alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
-  goalName: { fontSize: 24, fontWeight: '700', color: '#111111', marginBottom: 4 },
-  goalAmount: { fontSize: 52, fontWeight: '700', color: '#111111' },
+  goalName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111111',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  goalAmount: {
+    fontSize: 56,
+    fontWeight: '700',
+    color: '#111111',
+    textAlign: 'center',
+    letterSpacing: -1,
+  },
 
+  // Progress card
   progressCard: {
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     backgroundColor: '#F0F0F0',
     borderRadius: 20,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  progressRow: {
+  progressTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
+    gap: 8,
   },
-  lockIcon: { fontSize: 18, marginRight: 10 },
-  daysLeft: { fontSize: 16, fontWeight: '600', color: '#111111', flex: 1 },
-  totalDays: { fontSize: 14, color: '#888888' },
+  lockIcon: { fontSize: 18 },
+  daysLeftText: { fontSize: 16, fontWeight: '600', color: '#111111', flex: 1 },
+  totalDaysText: { fontSize: 14, color: '#888888' },
   progressTrack: {
-    height: 10,
+    height: 12,
     backgroundColor: '#DDDDDD',
-    borderRadius: 5,
+    borderRadius: 6,
     overflow: 'hidden',
   },
   progressFill: {
-    height: 10,
+    height: 12,
     backgroundColor: '#111111',
-    borderRadius: 5,
+    borderRadius: 6,
   },
 
+  // Release button
   releaseBtn: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
     backgroundColor: '#111111',
     borderRadius: 40,
     paddingVertical: 18,
@@ -224,26 +241,34 @@ const styles = StyleSheet.create({
   releaseBtnDisabled: { opacity: 0.6 },
   releaseBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
 
+  // Dark activity panel
   darkPanel: {
     backgroundColor: '#111111',
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 32,
-    marginTop: 4,
   },
   darkSectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     marginBottom: 20,
   },
   activityCard: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#1C1C1C',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
     marginBottom: 12,
   },
-  activityDate: { fontSize: 12, color: '#888888', marginBottom: 8, letterSpacing: 0.5 },
-  activityAmount: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
+  activityDate: {
+    fontSize: 11,
+    color: '#777777',
+    letterSpacing: 0.6,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  activityAmount: { fontSize: 34, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
 });

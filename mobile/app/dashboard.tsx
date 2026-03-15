@@ -67,42 +67,45 @@ export default function Dashboard() {
 
   const spendingBalance = parseFloat(status.spendingBalance);
   const lockedGoals = status.goals.filter(g => g.status === 'locked');
-  const releasedGoals = status.goals.filter(g => g.status === 'released');
   const allGoals = status.goals;
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#111" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#555" />}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>Tap Yield</Text>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>👤</Text>
+            <Text style={styles.avatarIcon}>⊙</Text>
           </View>
         </View>
 
-        {/* Card Widget */}
+        {/* Card Widget — floats above white panel */}
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push('/card')}
-          activeOpacity={0.85}
+          activeOpacity={0.9}
         >
-          <Text style={styles.cardLabel}>YOUR CARD</Text>
-          <Text style={styles.cardBalance}>{usd(spendingBalance)}</Text>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.cardLabel}>YOUR CARD</Text>
+            <Text style={styles.cardBalance}>{usd(spendingBalance)}</Text>
+          </View>
           {parseFloat(status.totalYieldEarned) > 0 && (
-            <View style={styles.yieldBadge}>
-              <Text style={styles.yieldBadgeText}>
-                +{usd(parseFloat(status.totalYieldEarned))} earned in yield
-              </Text>
+            <View style={styles.yieldBadgeRow}>
+              <View style={styles.yieldBadge}>
+                <Text style={styles.yieldBadgeText}>
+                  +{usd(parseFloat(status.totalYieldEarned))} earned in yield
+                </Text>
+              </View>
             </View>
           )}
         </TouchableOpacity>
 
-        {/* Locked Funds Panel */}
+        {/* Locked Funds Panel — card overlaps its top */}
         <View style={styles.whitePanel}>
           <Text style={styles.sectionLabel}>YOUR LOCKED FUNDS</Text>
 
@@ -117,9 +120,13 @@ export default function Dashboard() {
               onPress={() => router.push(`/goal/${goal.id}`)}
               activeOpacity={0.7}
             >
-              <Text style={styles.goalName}>{goal.name}</Text>
-              <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
-              <Text style={styles.goalDays}>{daysLeft(goal)} days left</Text>
+              <View style={styles.goalCardInner}>
+                <View>
+                  <Text style={styles.goalName}>{goal.name}</Text>
+                  <Text style={styles.goalAmount}>{usd(goal.targetAmount)}</Text>
+                </View>
+                <Text style={styles.goalDays}>{daysLeft(goal)} days left</Text>
+              </View>
             </TouchableOpacity>
           ))}
 
@@ -153,22 +160,17 @@ export default function Dashboard() {
             </TouchableOpacity>
           ))}
 
+          {/* Utility actions */}
           <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => router.push('/deposit')}
-            >
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/deposit')}>
               <Text style={styles.actionBtnText}>+ Deposit</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => router.push('/register-card')}
-            >
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/register-card')}>
               <Text style={styles.actionBtnText}>Register Card</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 48 }} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -181,125 +183,147 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#666', fontSize: 16 },
 
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
-  logo: { fontSize: 32, fontWeight: '800', color: '#111111' },
+  logo: { fontSize: 34, fontWeight: '800', color: '#111111', letterSpacing: -0.5 },
   avatar: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#111111', justifyContent: 'center', alignItems: 'center',
   },
-  avatarText: { fontSize: 18 },
+  avatarIcon: { color: '#FFFFFF', fontSize: 20 },
 
+  // Card widget
   card: {
-    marginHorizontal: 16,
-    marginBottom: -20,
-    backgroundColor: '#8A8A8A',
+    marginHorizontal: 14,
+    marginBottom: -64,          // overlaps white panel below
+    backgroundColor: '#909090',
     borderRadius: 20,
-    padding: 24,
-    minHeight: 160,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 20,
+    height: 218,
     justifyContent: 'space-between',
     zIndex: 1,
   },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   cardLabel: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.75)',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 1,
+    marginTop: 4,
   },
   cardBalance: {
     color: '#FFFFFF',
-    fontSize: 48,
+    fontSize: 44,
     fontWeight: '700',
-    marginTop: 8,
+    letterSpacing: -1,
   },
+  yieldBadgeRow: { alignItems: 'flex-end' },
   yieldBadge: {
-    alignSelf: 'flex-end',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  yieldBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  yieldBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '500' },
 
+  // White panel
   whitePanel: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 84,             // clears the card overlap (64 + 20 breathing room)
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 8,
+    paddingBottom: 12,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#111111',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     marginBottom: 20,
   },
   emptyText: { color: '#999', fontSize: 14, marginBottom: 16 },
 
   goalCard: {
     backgroundColor: '#F0F0F0',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
   },
-  goalName: { fontSize: 14, color: '#666666', marginBottom: 4 },
-  goalAmount: { fontSize: 32, fontWeight: '700', color: '#111111' },
-  goalDays: {
-    fontSize: 13, color: '#999999', textAlign: 'right', marginTop: 8,
+  goalCardInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
+  goalName: { fontSize: 13, color: '#777777', marginBottom: 6 },
+  goalAmount: { fontSize: 34, fontWeight: '700', color: '#111111', letterSpacing: -0.5 },
+  goalDays: { fontSize: 13, color: '#999999', marginBottom: 4 },
 
   createGoalBtn: {
     backgroundColor: '#F0F0F0',
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 18,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   createGoalText: { fontSize: 15, fontWeight: '600', color: '#111111' },
 
+  // Dark panel
   darkPanel: {
     backgroundColor: '#111111',
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 32,
-    marginTop: 12,
   },
   darkSectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     marginBottom: 20,
   },
-  darkEmptyText: { color: '#666', fontSize: 14, marginBottom: 16 },
+  darkEmptyText: { color: '#555', fontSize: 14, marginBottom: 16 },
 
   activityCard: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#1C1C1C',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
     marginBottom: 12,
   },
-  activityDate: { fontSize: 12, color: '#888888', marginBottom: 8, letterSpacing: 0.5 },
-  activityAmount: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
+  activityDate: {
+    fontSize: 11,
+    color: '#777777',
+    letterSpacing: 0.6,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  activityAmount: { fontSize: 34, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
 
   actionsRow: {
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
-    marginBottom: 4,
   },
   actionBtn: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
-    borderRadius: 14,
-    paddingVertical: 14,
+    backgroundColor: '#1C1C1C',
+    borderRadius: 18,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   actionBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
